@@ -71,9 +71,85 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Command to list available models (for debugging/info)
 	const listModelsCommand = vscode.commands.registerCommand('prompt-improver.listAvailableModels', async () => {
-		const models = await vscode.lm.selectChatModels({});
-		const modelInfo = models.map(m => `${m.vendor}/${m.family} (${m.id})`).join('\n');
-		vscode.window.showInformationMessage(`Available Models:\n${modelInfo}`, { modal: true });
+		try {
+			const models = await vscode.lm.selectChatModels({});
+			
+			if (models.length === 0) {
+				vscode.window.showWarningMessage('No language models available. Make sure GitHub Copilot is enabled.');
+				return;
+			}
+
+			// Group models by vendor
+			const modelsByVendor = models.reduce((acc, m) => {
+				if (!acc[m.vendor]) {
+					acc[m.vendor] = [];
+				}
+				acc[m.vendor].push(m);
+				return acc;
+			}, {} as Record<string, typeof models>);
+
+			// Format the output
+			let output = '**Available Copilot Models**\n\n';
+			output += 'Copy the **family** name to use in settings:\n\n';
+			
+			for (const [vendor, vendorModels] of Object.entries(modelsByVendor)) {
+				output += `**${vendor}:**\n`;
+				for (const model of vendorModels) {
+					output += `  • \`${model.family}\` - ${model.name}\n`;
+				}
+				output += '\n';
+			}
+
+			output += '\n**How to use:**\n';
+			output += '1. Copy a model family name (e.g., `gpt-4o`)\n';
+			output += '2. Open Settings → Prompt Improver → Model Family\n';
+			output += '3. Paste the family name';
+
+			// Show in a better format
+			const panel = vscode.window.createWebviewPanel(
+				'availableModels',
+				'Available Copilot Models',
+				vscode.ViewColumn.One,
+				{}
+			);
+
+			panel.webview.html = `
+				<!DOCTYPE html>
+				<html>
+				<head>
+					<style>
+						body { 
+							padding: 20px; 
+							font-family: var(--vscode-font-family);
+							color: var(--vscode-foreground);
+						}
+						h2 { color: var(--vscode-textLink-foreground); }
+						code { 
+							background: var(--vscode-textCodeBlock-background);
+							padding: 2px 6px;
+							border-radius: 3px;
+							font-family: var(--vscode-editor-font-family);
+						}
+						.model-group { margin: 20px 0; }
+						.model-item { margin: 8px 0; }
+						.instructions { 
+							background: var(--vscode-textBlockQuote-background);
+							border-left: 4px solid var(--vscode-textLink-foreground);
+							padding: 12px;
+							margin-top: 20px;
+						}
+					</style>
+				</head>
+				<body>
+					${output.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+						.replace(/`([^`]+)`/g, '<code>$1</code>')
+						.replace(/\n/g, '<br>')}
+				</body>
+				</html>
+			`;
+		} catch (error) {
+			vscode.window.showErrorMessage(`Failed to list models: ${error}`);
+		}
 	});
 
 	context.subscriptions.push(participant, copyCommand, configWatcher, listModelsCommand);

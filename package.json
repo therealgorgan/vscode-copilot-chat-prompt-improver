@@ -82,28 +82,57 @@
           "type": "string",
           "default": "gpt-4o",
           "enum": [
+            "",
             "gpt-4o",
             "gpt-4o-mini",
-            "gpt-4-turbo",
             "gpt-4",
+            "gpt-4-turbo",
+            "gpt-4.1",
+            "gpt-5",
+            "gpt-5-mini",
+            "gpt-5-codex",
             "gpt-3.5-turbo",
-            "o1-preview",
-            "o1-mini",
+            "o3",
+            "o3-mini",
+            "o4-mini",
             "claude-3.5-sonnet",
-            ""
+            "claude-3.7-sonnet",
+            "claude-3.7-sonnet-thought",
+            "claude-sonnet-4",
+            "claude-sonnet-4.5",
+            "claude-opus-4",
+            "claude-opus-4.1",
+            "gemini-2.0-flash",
+            "gemini-2.5-pro",
+            "grok-code"
           ],
           "enumDescriptions": [
-            "GPT-4o - Latest and most capable model (recommended)",
-            "GPT-4o Mini - Faster, lightweight version of GPT-4o",
-            "GPT-4 Turbo - Previous generation high-capability model",
+            "Default - Use the default model selected by the provider",
+            "GPT-4o - Latest GPT-4 optimized model (recommended)",
+            "GPT-4o mini - Faster, lightweight version of GPT-4o",
             "GPT-4 - Original GPT-4 model",
-            "GPT-3.5 Turbo - Fast and efficient for simpler tasks",
-            "O1 Preview - Advanced reasoning model (preview)",
-            "O1 Mini - Lightweight reasoning model",
-            "Claude 3.5 Sonnet - Anthropic's latest model (if available)",
-            "Default - Use the default model selected by the provider"
+            "GPT-4 Turbo - Previous generation high-capability model",
+            "GPT-4.1 - Enhanced GPT-4 model",
+            "GPT-5 - Next generation GPT model",
+            "GPT-5 mini - Lightweight GPT-5 model",
+            "GPT-5-Codex (Preview) - Specialized coding model",
+            "GPT 3.5 Turbo - Fast and efficient for simpler tasks",
+            "o3 (Preview) - Advanced reasoning model",
+            "o3-mini - Lightweight reasoning model",
+            "o4-mini (Preview) - Next-gen mini reasoning model",
+            "Claude Sonnet 3.5 - Anthropic's capable model",
+            "Claude Sonnet 3.7 - Enhanced Anthropic model",
+            "Claude Sonnet 3.7 Thinking - Claude with extended reasoning",
+            "Claude Sonnet 4 - Latest Claude Sonnet generation",
+            "Claude Sonnet 4.5 (Preview) - Preview of next Claude version",
+            "Claude Opus 4 - Most capable Claude model",
+            "Claude Opus 4.1 - Enhanced Claude Opus",
+            "Gemini 2.0 Flash - Google's fast model",
+            "Gemini 2.5 Pro - Google's advanced model",
+            "Grok Code Fast 1 (Preview) - xAI's coding model"
           ],
-          "description": "Select which model to use for prompt improvement. Different models offer different capabilities and speeds."
+          "markdownDescription": "**Model Family** - Select which model to use for prompt improvement.\n\n💡 Models are listed in order of capability. Different models offer different speeds and capabilities.\n\n**Note:** Available models depend on your GitHub Copilot subscription. If a model isn't working, run `Prompt Improver: List Available Copilot Models` to see what you have access to.",
+          "order": 3
         },
         "promptImprover.systemPromptPreset": {
           "type": "string",
@@ -134,8 +163,8 @@
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "⚠️ **Internal use only** - This stores your custom prompt when using the 'custom' preset. Edit the 'System Prompt' field above instead.",
-          "order": 99
+          "markdownDescription": "**Custom System Prompt Storage** - Your custom prompt is automatically saved here when you edit the 'System Prompt' field above.\n\nYou can also edit this directly if you prefer.",
+          "order": 2
         }
       }
     }
