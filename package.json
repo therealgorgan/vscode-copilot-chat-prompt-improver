@@ -2,7 +2,7 @@
   "name": "prompt-improver",
   "displayName": "Prompt Improver",
   "description": "Improve your Copilot Chat prompts using AI and workspace context",
-  "version": "0.0.12",
+  "version": "0.0.15",
   "publisher": "TheRealGorgan",
   "author": {
     "name": "The Real Gorgan",
@@ -67,14 +67,6 @@
           {
             "name": "analyze",
             "description": "Analyze what makes a prompt effective"
-          },
-          {
-            "name": "summary",
-            "description": "Summarize the current conversation and recent work"
-          },
-          {
-            "name": "handoff",
-            "description": "Create a context-preserving prompt for starting a new chat"
           }
         ],
         "disambiguation": [
@@ -127,8 +119,8 @@
         },
         "promptImprover.includeConversationHistory": {
           "type": "boolean",
-          "default": true,
-          "markdownDescription": "**Include Conversation History** - Summarizes previous chat messages to understand what you've been working on.\n\n**Why:** Improved prompts are aware of recent work and decisions. **When to disable:** Starting a new topic. **Impact:** Fast (intelligent summarization).",
+          "default": false,
+          "markdownDescription": "**⚠️ DISABLED - API Limitation** - This setting is currently disabled and non-functional.\n\n**Why it doesn't work:** VS Code chat participants can only see their own messages, not the full conversation history. The `context.history` API only includes messages for the current participant.\n\n**When it will work:** When VS Code updates the Chat API or GitHub Copilot adds native prompt improvement functionality.\n\n**Current workaround:** None available. The extension focuses on workspace context (files, git, docs) instead of conversation history.",
           "order": 4
         },
         "promptImprover.includeMarkdownFiles": {
@@ -149,17 +141,53 @@
           "markdownDescription": "**Include Git Context** - Detects current branch, recent commits, and uncommitted changes.\n\n**Why:** Improved prompts align with your current work. **When to disable:** Non-git projects. **Impact:** Fast (10s timeout), lightweight.",
           "order": 7
         },
+        "promptImprover.includeActiveSelection": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Include Active Selection** - If you have text selected in the editor, it will be included as context.\n\n**Why:** Prompts reference the exact code you're looking at. **When to disable:** Never (no cost if nothing selected). **Impact:** Instant, no overhead.",
+          "order": 8
+        },
+        "promptImprover.includeDiagnostics": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Include Diagnostics** - Includes current errors and warnings from your workspace.\n\n**Why:** Perfect for debugging prompts—context about what's broken. **When to disable:** If you don't want to share error info. **Impact:** Fast, very useful for fixes.",
+          "order": 9
+        },
+        "promptImprover.includeRecentEdits": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Include Recent Edits** - Tracks which files you've been editing in the last 5 minutes.\n\n**Why:** Shows what you're actively working on. **When to disable:** Privacy concerns about tracking. **Impact:** Instant, tracks in memory only.",
+          "order": 10
+        },
+        "promptImprover.includeClipboard": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "**Include Clipboard Content** - If your clipboard contains code or error messages, it will be included.\n\n**Why:** Users often copy errors before asking for help. **When to disable:** Privacy concerns. **Impact:** Fast, only includes if clipboard has technical content.",
+          "order": 11
+        },
+        "promptImprover.includeSymbolSearch": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "**Include Symbol Search** - Searches workspace for classes/functions mentioned in your prompt.\n\n**Why:** Finds definitions and usage of code you're asking about. **When to disable:** Large workspaces (slow). **Impact:** Medium cost—searches workspace symbols.",
+          "order": 12
+        },
+        "promptImprover.includeDetailedDependencies": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "**Include Detailed Dependencies** - Reads all package.json files to get full dependency list.\n\n**Why:** Suggestions compatible with installed packages. **When to disable:** Monorepos with many packages. **Impact:** Medium cost—scans all package.json files.",
+          "order": 13
+        },
         "promptImprover.useWorkspaceTools": {
           "type": "boolean",
           "default": false,
           "markdownDescription": "**Use Workspace Tools** - Grants the prompt improver access to search your codebase and read files.\n\n**Why:** Deeply contextual prompts based on actual code. **When to disable:** Privacy concerns or large workspaces (slow). **Impact:** High cost—actively searches workspace.",
-          "order": 8
+          "order": 14
         },
         "promptImprover.filterWorkspaceTools": {
           "type": "boolean",
           "default": true,
           "markdownDescription": "**Filter Workspace Tools** - Limits workspace tool access to only file/directory operations (removes grep/semantic search).\n\n**Why:** Faster responses, lower cost while maintaining code access. **When to enable:** Always, unless you need deep search. **Impact:** Reduces tool overhead significantly.",
-          "order": 9
+          "order": 15
         }
       }
     }

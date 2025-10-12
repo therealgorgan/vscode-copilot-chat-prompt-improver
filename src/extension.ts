@@ -10,6 +10,9 @@ interface PromptImproverResult extends vscode.ChatResult {
 
 const PARTICIPANT_ID = 'prompt-improver.prompt-improver';
 
+// Track recent file edits for context
+let recentEdits: Array<{ file: string; timestamp: number }> = [];
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -43,6 +46,19 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 	context.subscriptions.push(configChangeListener);
+
+	// Track document changes for recent edits context
+	const documentChangeListener = vscode.workspace.onDidChangeTextDocument(e => {
+		if (e.document.uri.scheme === 'file') {
+			const file = vscode.workspace.asRelativePath(e.document.uri);
+			recentEdits.push({ file, timestamp: Date.now() });
+			// Keep only last 50 edits to avoid memory issues
+			if (recentEdits.length > 50) {
+				recentEdits.shift();
+			}
+		}
+	});
+	context.subscriptions.push(documentChangeListener);
 
 	// Initialize systemPrompt with current preset content if it's empty or contains old preset
 	const currentSystemPrompt = config.get<string>('systemPrompt', '');
@@ -89,37 +105,6 @@ export function activate(context: vscode.ExtensionContext) {
 						prompt: 'Analyze what makes this improved prompt effective',
 						label: vscode.l10n.t('Analyze the improvements'),
 						command: 'analyze'
-					},
-					{
-						prompt: 'Summarize the conversation',
-						label: vscode.l10n.t('Summarize conversation'),
-						command: 'summary'
-					},
-					{
-						prompt: 'Create handoff prompt for new chat',
-						label: vscode.l10n.t('Create handoff prompt'),
-						command: 'handoff'
-					}
-				];
-			} else if (result.metadata.command === 'summary') {
-				return [
-					{
-						prompt: 'Improve my next prompt based on this summary',
-						label: vscode.l10n.t('Improve a prompt'),
-						command: 'improve'
-					},
-					{
-						prompt: 'Create handoff prompt with this context',
-						label: vscode.l10n.t('Create handoff prompt'),
-						command: 'handoff'
-					}
-				];
-			} else if (result.metadata.command === 'handoff' || result.metadata.command === 'new-chat') {
-				return [
-					{
-						prompt: 'Improve the handoff prompt',
-						label: vscode.l10n.t('Improve handoff prompt'),
-						command: 'improve'
 					}
 				];
 			}
@@ -364,10 +349,6 @@ async function handleChatRequest(
 		// Determine which command to execute
 		if (request.command === 'analyze') {
 			await handleAnalyzeCommand(request, context, stream, token);
-		} else if (request.command === 'summary') {
-			await handleSummaryCommand(request, context, stream, token);
-		} else if (request.command === 'handoff' || request.command === 'new-chat') {
-			await handleHandoffCommand(request, context, stream, token);
 		} else if (request.command === 'improve-concise') {
 			await handleImproveCommand(request, context, stream, token, 'concise');
 		} else if (request.command === 'improve-balanced') {
@@ -444,6 +425,12 @@ async function handleImproveCommand(
 	const includeMarkdownFiles = config.get<boolean>('includeMarkdownFiles', true);
 	const includeOpenFileContents = config.get<boolean>('includeOpenFileContents', true);
 	const includeGitContext = config.get<boolean>('includeGitContext', true);
+	const includeActiveSelection = config.get<boolean>('includeActiveSelection', true);
+	const includeDiagnostics = config.get<boolean>('includeDiagnostics', true);
+	const includeRecentEdits = config.get<boolean>('includeRecentEdits', true);
+	const includeClipboard = config.get<boolean>('includeClipboard', false);
+	const includeSymbolSearch = config.get<boolean>('includeSymbolSearch', false);
+	const includeDetailedDependencies = config.get<boolean>('includeDetailedDependencies', false);
 	const useWorkspaceTools = config.get<boolean>('useWorkspaceTools', false);
 	const filterWorkspaceTools = config.get<boolean>('filterWorkspaceTools', true);
 
@@ -510,8 +497,101 @@ async function handleImproveCommand(
 			return;
 		}
 
+		// Gather active selection if enabled
+		let activeSelection: ActiveSelectionContext | undefined;
+		if (includeActiveSelection && !isCancelled(token)) {
+			activeSelection = await gatherActiveSelection();
+			if (activeSelection) {
+				safeStreamWrite(stream, `Including selected code from ${activeSelection.file}`, 'progress');
+			}
+		}
+
+		// Gather diagnostics if enabled
+		let diagnostics: DiagnosticsContext | undefined;
+		if (includeDiagnostics && !isCancelled(token)) {
+			safeStreamWrite(stream, 'Analyzing workspace diagnostics...', 'progress');
+			diagnostics = await gatherDiagnostics();
+			if (diagnostics && diagnostics.totalErrors > 0) {
+				safeStreamWrite(stream, `Found ${diagnostics.totalErrors} errors and ${diagnostics.totalWarnings} warnings`, 'progress');
+			}
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Operation cancelled during diagnostics gathering');
+			return;
+		}
+
+		// Gather recent edits if enabled
+		let recentEditsContext: RecentEditsContext | undefined;
+		if (includeRecentEdits && !isCancelled(token)) {
+			recentEditsContext = gatherRecentEdits();
+			if (recentEditsContext && recentEditsContext.files.length > 0) {
+				safeStreamWrite(stream, `Tracking ${recentEditsContext.files.length} recently edited files`, 'progress');
+			}
+		}
+
+		// Gather clipboard context if enabled
+		let clipboardContext: ClipboardContext | undefined;
+		if (includeClipboard && !isCancelled(token)) {
+			clipboardContext = await gatherClipboardContext();
+			if (clipboardContext) {
+				const type = clipboardContext.hasError ? 'error message' : 'code';
+				safeStreamWrite(stream, `Including clipboard ${type}`, 'progress');
+			}
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Operation cancelled during clipboard gathering');
+			return;
+		}
+
+		// Gather symbol search if enabled
+		let symbolSearch: SymbolSearchContext | undefined;
+		if (includeSymbolSearch && !isCancelled(token)) {
+			safeStreamWrite(stream, 'Searching for relevant symbols...', 'progress');
+			symbolSearch = await gatherSymbolSearch(userPrompt);
+			if (symbolSearch && symbolSearch.symbols.length > 0) {
+				safeStreamWrite(stream, `Found ${symbolSearch.symbols.length} relevant symbols`, 'progress');
+			}
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Operation cancelled during symbol search');
+			return;
+		}
+
+		// Gather detailed dependencies if enabled
+		let dependencies: DependencyContext | undefined;
+		if (includeDetailedDependencies && !isCancelled(token)) {
+			safeStreamWrite(stream, 'Analyzing dependencies...', 'progress');
+			dependencies = await gatherDetailedDependencies();
+			if (dependencies && dependencies.totalDependencies > 0) {
+				safeStreamWrite(stream, `Found ${dependencies.totalDependencies} dependencies across ${dependencies.packageCount} packages`, 'progress');
+			}
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Operation cancelled during dependency analysis');
+			return;
+		}
+
 		// Build the prompt for the LLM
-		const systemPrompt = buildImprovePrompt(userPrompt, workspaceContext, overridePreset, references, conversationHistory, markdownContext, openFileContents, gitContext);
+		const systemPrompt = buildImprovePrompt(
+			userPrompt, 
+			workspaceContext, 
+			overridePreset, 
+			references, 
+			conversationHistory, 
+			markdownContext, 
+			openFileContents, 
+			gitContext,
+			activeSelection,
+			diagnostics,
+			recentEditsContext,
+			clipboardContext,
+			symbolSearch,
+			dependencies
+		);
 
 		// Get the configured language model (or use current chat model)
 		const model = await getConfiguredModel(request.model);
@@ -733,6 +813,9 @@ async function handleAnalyzeCommand(
 /**
  * Handle the /handoff command - creates a context-preserving prompt for starting a new chat
  */
+/**
+ * Handle the /handoff or /new-chat command - creates a context-rich handoff prompt for starting a new chat
+ */
 async function handleHandoffCommand(
 	request: vscode.ChatRequest,
 	context: vscode.ChatContext,
@@ -751,6 +834,32 @@ async function handleHandoffCommand(
 
 		// Extract conversation history
 		const conversationHistory = extractConversationHistory(context);
+
+		// Check if user has provided their own context in the prompt
+		const userProvidedContext = request.prompt && request.prompt.trim().length > 20;
+
+		// Check if there are actual responses from other participants (not just requests to @prompt-improver)
+		const hasConversationContext = conversationHistory && conversationHistory.responses.length > 0;
+
+		if (!userProvidedContext && !hasConversationContext) {
+			// No conversation history and no user-provided context - show manual workflow instructions
+			safeStreamWrite(stream, '## 🔄 How to Create a Handoff Prompt\n\n');
+			safeStreamWrite(stream, '⚠️ **Important:** Chat participants can only see their own messages due to VS Code API limitations.\n\n');
+			safeStreamWrite(stream, 'To create a handoff prompt, please follow these steps:\n\n');
+			safeStreamWrite(stream, '### Step 1: Get Summary from Copilot\n');
+			safeStreamWrite(stream, 'Ask **GitHub Copilot** directly (without mentioning me):\n\n');
+			safeStreamWrite(stream, '```\n');
+			safeStreamWrite(stream, 'Please summarize our entire conversation including current tasks and blockers\n');
+			safeStreamWrite(stream, '```\n\n');
+			safeStreamWrite(stream, '### Step 2: Send Summary to Me\n');
+			safeStreamWrite(stream, 'Copy the summary Copilot provides, then send it to me:\n\n');
+			safeStreamWrite(stream, '```\n');
+			safeStreamWrite(stream, '@prompt-improver /handoff [paste Copilot\'s summary here]\n');
+			safeStreamWrite(stream, '```\n\n');
+			safeStreamWrite(stream, '💡 **I\'ll then** create an optimized handoff prompt for starting a new chat with full context.\n\n');
+			
+			return;
+		}
 
 		if (isCancelled(token)) {
 			console.log('[Prompt Improver] Handoff operation cancelled during history extraction');
@@ -852,6 +961,7 @@ async function handleHandoffCommand(
 			// Button creation failed (stream might be closed)
 			console.warn('[Prompt Improver] Could not add copy button to handoff:', buttonError);
 		}
+
 	} catch (err) {
 		handleError(err, stream);
 	}
@@ -859,6 +969,9 @@ async function handleHandoffCommand(
 
 /**
  * Handle the /summary command - summarizes the conversation history
+ */
+/**
+ * Handle the /summary command - creates an archival summary of the conversation
  */
 async function handleSummaryCommand(
 	request: vscode.ChatRequest,
@@ -873,8 +986,29 @@ async function handleSummaryCommand(
 		// Extract conversation history
 		const conversationHistory = extractConversationHistory(context);
 
-		if (!conversationHistory || (conversationHistory.requests.length === 0 && conversationHistory.responses.length === 0)) {
-			safeStreamWrite(stream, '⚠️ No conversation history found. Start a conversation first, then use `/summary` to get a summary.\n\n');
+		// Check if user has provided their own context in the prompt
+		const userProvidedContext = request.prompt && request.prompt.trim().length > 20;
+
+		// Check if there are actual responses from other participants (not just requests to @prompt-improver)
+		const hasConversationContext = conversationHistory && conversationHistory.responses.length > 0;
+
+		if (!userProvidedContext && !hasConversationContext) {
+			// No conversation history and no user-provided context - show manual workflow instructions
+			safeStreamWrite(stream, '## 📋 How to Generate a Conversation Summary\n\n');
+			safeStreamWrite(stream, '⚠️ **Important:** Chat participants can only see their own messages due to VS Code API limitations.\n\n');
+			safeStreamWrite(stream, 'To create a summary, please follow these steps:\n\n');
+			safeStreamWrite(stream, '### Step 1: Get Summary from Copilot\n');
+			safeStreamWrite(stream, 'Ask **GitHub Copilot** directly (without mentioning me):\n\n');
+			safeStreamWrite(stream, '```\n');
+			safeStreamWrite(stream, 'Please summarize our entire conversation\n');
+			safeStreamWrite(stream, '```\n\n');
+			safeStreamWrite(stream, '### Step 2: Send Summary to Me\n');
+			safeStreamWrite(stream, 'Copy the summary Copilot provides, then send it to me:\n\n');
+			safeStreamWrite(stream, '```\n');
+			safeStreamWrite(stream, '@prompt-improver /summary [paste Copilot\'s summary here]\n');
+			safeStreamWrite(stream, '```\n\n');
+			safeStreamWrite(stream, '💡 **I\'ll then** analyze it and provide an enhanced archival summary optimized for documentation.\n\n');
+			
 			return;
 		}
 
@@ -1455,6 +1589,268 @@ async function execGitCommand(cwd: string, command: string): Promise<string | nu
 }
 
 /**
+ * Gather active text selection context from the active editor
+ */
+async function gatherActiveSelection(): Promise<ActiveSelectionContext | undefined> {
+	try {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || editor.selection.isEmpty) {
+			return undefined;
+		}
+
+		const selection = editor.selection;
+		const text = editor.document.getText(selection);
+
+		// Only include if selection is meaningful (more than a few characters)
+		if (text.trim().length < 3) {
+			return undefined;
+		}
+
+		return {
+			text,
+			file: vscode.workspace.asRelativePath(editor.document.uri),
+			language: editor.document.languageId,
+			range: `${selection.start.line + 1}-${selection.end.line + 1}`,
+			lineCount: selection.end.line - selection.start.line + 1
+		};
+	} catch (error) {
+		console.warn('[Prompt Improver] Error gathering active selection:', error);
+		return undefined;
+	}
+}
+
+/**
+ * Gather diagnostics (errors, warnings) from workspace
+ */
+async function gatherDiagnostics(): Promise<DiagnosticsContext> {
+	const context: DiagnosticsContext = {
+		totalErrors: 0,
+		totalWarnings: 0,
+		totalInfos: 0,
+		filesWithIssues: []
+	};
+
+	try {
+		const diagnostics = vscode.languages.getDiagnostics();
+
+		const fileMap = new Map<string, { errors: number; warnings: number; infos: number; topErrors: string[] }>();
+
+		for (const [uri, diags] of diagnostics) {
+			if (diags.length === 0 || uri.scheme !== 'file') {
+				continue;
+			}
+
+			const file = vscode.workspace.asRelativePath(uri);
+			const errors = diags.filter(d => d.severity === vscode.DiagnosticSeverity.Error);
+			const warnings = diags.filter(d => d.severity === vscode.DiagnosticSeverity.Warning);
+			const infos = diags.filter(d => d.severity === vscode.DiagnosticSeverity.Information);
+
+			context.totalErrors += errors.length;
+			context.totalWarnings += warnings.length;
+			context.totalInfos += infos.length;
+
+			if (errors.length > 0 || warnings.length > 0) {
+				// Get top 3 error messages
+				const topErrors = errors.slice(0, 3).map(e => 
+					`Line ${e.range.start.line + 1}: ${e.message.substring(0, 100)}`
+				);
+
+				fileMap.set(file, {
+					errors: errors.length,
+					warnings: warnings.length,
+					infos: infos.length,
+					topErrors
+				});
+			}
+		}
+
+		// Convert map to array and sort by error count
+		context.filesWithIssues = Array.from(fileMap.entries())
+			.map(([file, data]) => ({
+				file,
+				errors: data.errors,
+				warnings: data.warnings,
+				topErrors: data.topErrors
+			}))
+			.sort((a, b) => b.errors - a.errors)
+			.slice(0, 10); // Limit to top 10 files with issues
+
+	} catch (error) {
+		console.warn('[Prompt Improver] Error gathering diagnostics:', error);
+	}
+
+	return context;
+}
+
+/**
+ * Get recently edited files from tracked edits
+ */
+function gatherRecentEdits(timeWindowMinutes: number = 5): RecentEditsContext {
+	const cutoffTime = Date.now() - (timeWindowMinutes * 60 * 1000);
+	
+	const recentFiles = recentEdits
+		.filter(e => e.timestamp > cutoffTime)
+		.map(e => e.file);
+
+	// Remove duplicates and count
+	const uniqueFiles = [...new Set(recentFiles)];
+
+	return {
+		files: uniqueFiles.slice(0, 15), // Limit to 15 most recent files
+		editCount: recentFiles.length,
+		timeWindowMinutes
+	};
+}
+
+/**
+ * Get clipboard content if it looks like code or error messages
+ */
+async function gatherClipboardContext(): Promise<ClipboardContext | undefined> {
+	try {
+		const clipboardText = await vscode.env.clipboard.readText();
+
+		// Only use if clipboard has content and isn't too long
+		if (!clipboardText || clipboardText.length === 0 || clipboardText.length > 10000) {
+			return undefined;
+		}
+
+		// Detect if clipboard contains code or errors
+		const codeMarkers = [
+			'function', 'class', 'const', 'let', 'var', 'import', 'export',
+			'def ', 'public', 'private', 'interface', 'type ', '{', '}', 
+			'(', ')', '=>', '::', '->', 'async', 'await'
+		];
+
+		const errorMarkers = [
+			'Error:', 'Exception:', 'TypeError:', 'ReferenceError:', 'SyntaxError:',
+			'Warning:', 'at ', 'stack trace', 'failed', 'ENOENT', 'EACCES',
+			'Traceback', 'line ', 'expected', 'undefined is not'
+		];
+
+		const textLower = clipboardText.toLowerCase();
+		const hasCode = codeMarkers.some(marker => textLower.includes(marker.toLowerCase()));
+		const hasError = errorMarkers.some(marker => textLower.includes(marker.toLowerCase()));
+
+		// Only return if clipboard seems to have technical content
+		if (hasCode || hasError) {
+			// Truncate if too long
+			const content = clipboardText.length > 2000 
+				? clipboardText.substring(0, 2000) + '\n... [truncated]'
+				: clipboardText;
+
+			return {
+				content,
+				hasCode,
+				hasError,
+				length: clipboardText.length
+			};
+		}
+
+		return undefined;
+	} catch (error) {
+		console.warn('[Prompt Improver] Error accessing clipboard:', error);
+		return undefined;
+	}
+}
+
+/**
+ * Search for symbols mentioned in the user prompt
+ */
+async function gatherSymbolSearch(userPrompt: string): Promise<SymbolSearchContext> {
+	const context: SymbolSearchContext = {
+		symbols: []
+	};
+
+	try {
+		// Extract potential symbol names from prompt (words that look like code identifiers)
+		const words = userPrompt.match(/\b[A-Z][a-zA-Z0-9_]*\b|\b[a-z][a-zA-Z0-9_]{2,}\b/g) || [];
+		const uniqueWords = [...new Set(words)].slice(0, 5); // Limit searches
+
+		for (const word of uniqueWords) {
+			try {
+				const symbols = await vscode.commands.executeCommand<vscode.SymbolInformation[]>(
+					'vscode.executeWorkspaceSymbolProvider',
+					word
+				);
+
+				if (symbols && symbols.length > 0) {
+					// Take top 3 matches per search term
+					for (const symbol of symbols.slice(0, 3)) {
+						context.symbols.push({
+							name: symbol.name,
+							kind: vscode.SymbolKind[symbol.kind],
+							file: vscode.workspace.asRelativePath(symbol.location.uri),
+							containerName: symbol.containerName
+						});
+					}
+				}
+			} catch (error) {
+				// Symbol search failed for this word, continue
+				console.warn(`[Prompt Improver] Symbol search failed for "${word}":`, error);
+			}
+		}
+
+		// Limit total symbols to avoid token bloat
+		context.symbols = context.symbols.slice(0, 15);
+
+	} catch (error) {
+		console.warn('[Prompt Improver] Error in symbol search:', error);
+	}
+
+	return context;
+}
+
+/**
+ * Get detailed dependency information from all package.json files
+ */
+async function gatherDetailedDependencies(): Promise<DependencyContext> {
+	const context: DependencyContext = {
+		dependencies: {},
+		devDependencies: {},
+		packageCount: 0,
+		totalDependencies: 0
+	};
+
+	try {
+		const packageJsonFiles = await vscode.workspace.findFiles(
+			'**/package.json',
+			'**/node_modules/**',
+			20
+		);
+
+		for (const file of packageJsonFiles) {
+			try {
+				const content = await vscode.workspace.fs.readFile(file);
+				const pkg = JSON.parse(content.toString());
+
+				context.packageCount++;
+
+				// Merge dependencies
+				if (pkg.dependencies) {
+					Object.assign(context.dependencies, pkg.dependencies);
+				}
+
+				// Merge devDependencies
+				if (pkg.devDependencies) {
+					Object.assign(context.devDependencies, pkg.devDependencies);
+				}
+			} catch (error) {
+				console.warn(`[Prompt Improver] Could not parse ${file.fsPath}:`, error);
+			}
+		}
+
+		context.totalDependencies = 
+			Object.keys(context.dependencies).length + 
+			Object.keys(context.devDependencies).length;
+
+	} catch (error) {
+		console.warn('[Prompt Improver] Error gathering dependencies:', error);
+	}
+
+	return context;
+}
+
+/**
  * Scan workspace for relevant markdown files that might provide context
  */
 async function scanRelevantMarkdownFiles(userPrompt: string): Promise<MarkdownContext> {
@@ -1680,7 +2076,13 @@ function buildImprovePrompt(
 	conversationHistory?: ConversationHistory,
 	markdownContext?: MarkdownContext,
 	openFileContents?: OpenFileContents,
-	gitContext?: GitContext
+	gitContext?: GitContext,
+	activeSelection?: ActiveSelectionContext,
+	diagnostics?: DiagnosticsContext,
+	recentEdits?: RecentEditsContext,
+	clipboardContext?: ClipboardContext,
+	symbolSearch?: SymbolSearchContext,
+	dependencies?: DependencyContext
 ): string {
 	const systemPromptTemplate = getSystemPrompt(overridePreset);
 
@@ -1800,6 +2202,95 @@ function buildImprovePrompt(
 		gitContextSection += '\nUse this Git context to understand what the user is currently working on and recent development activity.\n';
 	}
 
+	// Format active selection if any
+	let activeSelectionSection = '';
+	if (activeSelection) {
+		activeSelectionSection = '\n\n**Active Selection:**\n';
+		activeSelectionSection += `The user has selected the following code in ${activeSelection.file} (lines ${activeSelection.range}):\n\n`;
+		activeSelectionSection += '```' + activeSelection.language + '\n';
+		activeSelectionSection += activeSelection.text;
+		activeSelectionSection += '\n```\n';
+		activeSelectionSection += '\nThe improved prompt should likely reference or work with this selected code.\n';
+	}
+
+	// Format diagnostics if any
+	let diagnosticsSection = '';
+	if (diagnostics && (diagnostics.totalErrors > 0 || diagnostics.totalWarnings > 0)) {
+		diagnosticsSection = '\n\n**Workspace Diagnostics:**\n';
+		diagnosticsSection += `- Total Errors: ${diagnostics.totalErrors}\n`;
+		diagnosticsSection += `- Total Warnings: ${diagnostics.totalWarnings}\n`;
+
+		if (diagnostics.filesWithIssues.length > 0) {
+			diagnosticsSection += '\n**Files with Issues:**\n';
+			for (const file of diagnostics.filesWithIssues.slice(0, 5)) {
+				diagnosticsSection += `- ${file.file}: ${file.errors} errors, ${file.warnings} warnings\n`;
+				if (file.topErrors.length > 0) {
+					for (const error of file.topErrors) {
+						diagnosticsSection += `  • ${error}\n`;
+					}
+				}
+			}
+			diagnosticsSection += '\nIf the prompt relates to fixing issues, consider these current errors when improving the prompt.\n';
+		}
+	}
+
+	// Format recent edits if any
+	let recentEditsSection = '';
+	if (recentEdits && recentEdits.files.length > 0) {
+		recentEditsSection = '\n\n**Recently Edited Files (last ${recentEdits.timeWindowMinutes} minutes):**\n';
+		recentEditsSection += recentEdits.files.join(', ') + '\n';
+		recentEditsSection += '\nThese are the files the user has been actively working on.\n';
+	}
+
+	// Format clipboard context if any
+	let clipboardSection = '';
+	if (clipboardContext) {
+		clipboardSection = '\n\n**Clipboard Content:**\n';
+		if (clipboardContext.hasError) {
+			clipboardSection += 'The user\'s clipboard contains what appears to be an error message:\n\n';
+		} else if (clipboardContext.hasCode) {
+			clipboardSection += 'The user\'s clipboard contains what appears to be code:\n\n';
+		}
+		clipboardSection += '```\n';
+		clipboardSection += clipboardContext.content;
+		clipboardSection += '\n```\n';
+		clipboardSection += '\nThe improved prompt may want to reference or work with this clipboard content.\n';
+	}
+
+	// Format symbol search results if any
+	let symbolSearchSection = '';
+	if (symbolSearch && symbolSearch.symbols.length > 0) {
+		symbolSearchSection = '\n\n**Found Symbols in Workspace:**\n';
+		symbolSearchSection += 'The following symbols were found that may be relevant to the user\'s prompt:\n\n';
+		for (const symbol of symbolSearch.symbols) {
+			const container = symbol.containerName ? ` (in ${symbol.containerName})` : '';
+			symbolSearchSection += `- ${symbol.name} (${symbol.kind})${container} - ${symbol.file}\n`;
+		}
+		symbolSearchSection += '\nConsider referencing these specific symbols if relevant to the user\'s intent.\n';
+	}
+
+	// Format dependencies if any
+	let dependenciesSection = '';
+	if (dependencies && dependencies.totalDependencies > 0) {
+		dependenciesSection = '\n\n**Project Dependencies:**\n';
+		dependenciesSection += `Found ${dependencies.totalDependencies} total dependencies across ${dependencies.packageCount} package.json files.\n\n`;
+
+		// Show key dependencies (popular frameworks/libraries)
+		const keyDeps = Object.keys(dependencies.dependencies).filter(dep => 
+			['react', 'vue', 'angular', 'express', 'fastify', 'next', 'nuxt', 
+			 'typescript', 'axios', 'lodash', 'moment', 'dayjs', 'zod', 'vite'].some(key => dep.includes(key))
+		);
+
+		if (keyDeps.length > 0) {
+			dependenciesSection += 'Key dependencies:\n';
+			for (const dep of keyDeps.slice(0, 10)) {
+				dependenciesSection += `- ${dep}: ${dependencies.dependencies[dep]}\n`;
+			}
+		}
+
+		dependenciesSection += '\nEnsure the improved prompt suggests solutions compatible with these installed packages.\n';
+	}
+
 	// Replace placeholders in the system prompt
 	let systemPrompt = systemPromptTemplate
 		.replace(/\{userPrompt\}/g, userPrompt)
@@ -1816,7 +2307,7 @@ ${userPrompt}
 **Workspace Context:**
 - Programming Languages: ${languages}
 - Frameworks/Technologies: ${technologies}
-- Open Files: ${openFiles}${referencesContext}${historyContext}${markdownContextSection}${openFileContentsSection}${gitContextSection}
+- Open Files: ${openFiles}${referencesContext}${historyContext}${markdownContextSection}${openFileContentsSection}${gitContextSection}${activeSelectionSection}${diagnosticsSection}${recentEditsSection}${clipboardSection}${symbolSearchSection}${dependenciesSection}
 
 Return the improved prompt now (plain text only, no markdown formatting, no wrapper text):`;
 }
@@ -2089,6 +2580,55 @@ interface GitContext {
 		author: string;
 		date: string;
 	}>;
+}
+
+interface ActiveSelectionContext {
+	text: string;
+	file: string;
+	language: string;
+	range: string;
+	lineCount: number;
+}
+
+interface DiagnosticsContext {
+	totalErrors: number;
+	totalWarnings: number;
+	totalInfos: number;
+	filesWithIssues: Array<{
+		file: string;
+		errors: number;
+		warnings: number;
+		topErrors: string[];
+	}>;
+}
+
+interface RecentEditsContext {
+	files: string[];
+	editCount: number;
+	timeWindowMinutes: number;
+}
+
+interface ClipboardContext {
+	content: string;
+	hasCode: boolean;
+	hasError: boolean;
+	length: number;
+}
+
+interface SymbolSearchContext {
+	symbols: Array<{
+		name: string;
+		kind: string;
+		file: string;
+		containerName?: string;
+	}>;
+}
+
+interface DependencyContext {
+	dependencies: Record<string, string>;
+	devDependencies: Record<string, string>;
+	packageCount: number;
+	totalDependencies: number;
 }
 
 // This method is called when your extension is deactivated

@@ -2,6 +2,77 @@
 
 All notable changes to the "prompt-improver" extension will be documented in this file.
 
+## [0.0.15] - 2025-10-12
+
+### Added
+- **6 New Context Sources** for richer prompt improvements:
+  - **Active Selection Context** (`includeActiveSelection`): Automatically includes code/text you have selected in the editor
+  - **Diagnostics Context** (`includeDiagnostics`): Includes current errors, warnings, and problems from workspace - perfect for debugging prompts
+  - **Recent Edits Tracking** (`includeRecentEdits`): Tracks files you've edited in the last 5 minutes to understand current work focus
+  - **Clipboard Context** (`includeClipboard`): Detects if clipboard contains error messages or code snippets (opt-in, disabled by default)
+  - **Symbol Search** (`includeSymbolSearch`): Finds classes/functions mentioned in your prompt across the workspace (opt-in, disabled by default)
+  - **Detailed Dependencies** (`includeDetailedDependencies`): Parses all package.json files for comprehensive dependency analysis (opt-in, disabled by default)
+
+### Changed
+- **Enhanced Context Intelligence**:
+  - Prompts now aware of selected code, active errors, and recent work
+  - Better understanding of what you're currently debugging
+  - Smarter suggestions based on clipboard content and workspace symbols
+- **Configuration Settings**: Added 6 new toggles for granular control over context gathering
+  - High-value features enabled by default (selection, diagnostics, recent edits)
+  - Resource-intensive features opt-in (clipboard, symbol search, detailed dependencies)
+- **Improved Progress Messages**: Shows specific context being gathered (e.g., "Found 5 errors and 12 warnings")
+
+### Fixed
+- Document change tracking properly disposed on extension deactivation
+- Better error handling for clipboard access and symbol search failures
+
+### Performance
+- Efficient tracking of recent edits (max 50 in memory)
+- Intelligent filtering of diagnostics (top 10 files with most errors)
+- Symbol search limited to 15 most relevant results
+
+### Documentation
+- Updated README with new context sources
+- Added configuration guide for new settings
+- Updated handoff notes with implementation details
+
+## [0.0.14] - 2025-10-12
+
+### Removed
+- **Removed /summary and /handoff commands**: These features were redundant and couldn't effectively access conversation history due to VS Code API limitations where chat participants can only see their own messages
+- Removed `handleSummaryCommand()` and `handleHandoffCommand()` functions
+- Removed `buildSummaryPrompt()` and `buildHandoffPrompt()` helper functions
+- Simplified followup provider to only suggest "Analyze the improvements" after /improve command
+
+### Changed
+- **Disabled "Include Conversation History" setting**: Setting now defaults to `false` and shows deprecation warning
+  - Added clear explanation about VS Code API limitation
+  - Will remain disabled until API is updated or Copilot adds native prompt improvement
+  - Setting is grayed out in VS Code settings UI with deprecation notice
+- Extension now focuses on core functionality: `/improve` and `/analyze` commands
+- Streamlined codebase by removing ~400 lines of unused conversation history handling code
+
+## [0.0.13] - 2025-10-12
+
+### Changed
+- **Improved /summary and /handoff User Experience**:
+  - Both commands now provide clear, step-by-step instructions when no conversation history is available
+  - Explicit guidance on the manual workflow required due to VS Code API limitations
+  - Commands detect when user provides context directly in the prompt (>20 characters) and process it immediately
+  - Better messaging explaining that chat participants can only see their own messages
+
+### Fixed
+- **Conversation History Handling**:
+  - Removed ineffective automated followup approach that couldn't access full conversation context
+  - Clearer documentation about VS Code API limitation where participants cannot see other participants' messages
+  - More intuitive workflow: Ask Copilot → Copy summary → Paste to @prompt-improver
+
+### Documentation
+- Updated instructions to clearly explain the manual 2-step workflow
+- Added warning about VS Code API limitations
+- Provided concrete examples of how to use /summary and /handoff commands
+
 ## [0.0.8] - 2025-10-12
 
 ### Added
