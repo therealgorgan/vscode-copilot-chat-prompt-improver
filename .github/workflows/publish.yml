@@ -1,0 +1,45 @@
+name: Build, Package and (optional) Publish VS Code Extension
+
+# Trigger on pushes to main and on version tags (v*). Adjust triggers as needed.
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (compile & bundle)
+        run: npm run package
+
+      - name: Create VSIX package
+        # Uses the locally installed vsce via npx so CI uses the proper Node version
+        run: npx vsce package
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension-vsix
+          path: '*.vsix'
+
+      - name: Publish to Visual Studio Marketplace (optional)
+        if: ${{ secrets.AZURE_DEVOPS_PAT != '' }}
+        # This step will publish the extension using the PAT stored as the repository secret AZURE_DEVOPS_PAT.
+        # To enable automatic publishing, add a repository secret named AZURE_DEVOPS_PAT with a PAT that has
+        # the Marketplace (publish) scope in Azure DevOps.
+        run: |
+          echo "Publishing with vsce..."
+          npx vsce publish --pat ${{ secrets.AZURE_DEVOPS_PAT }} || (echo "vsce publish failed" && exit 1)
