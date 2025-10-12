@@ -4,6 +4,12 @@ All notable changes to the "prompt-improver" extension will be documented in thi
 
 ## [0.0.5] - 2025-10-12
 
+### Fixed
+- **Settings UI Layout**: Shortened description text in settings to prevent label overlap
+  - Condensed "Model Family" description for better readability
+  - Optimized "System Prompt" and "Additional Custom Instructions" descriptions
+  - Improved visual spacing between setting fields
+
 ### Added
 - **Dynamic System Prompt Editing**: The "System Prompt" setting now displays the current preset's content and can be edited directly
 - **Auto-Switch to Custom**: When you edit the system prompt, the preset automatically switches to "custom"

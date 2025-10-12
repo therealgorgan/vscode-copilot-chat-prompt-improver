@@ -112,21 +112,21 @@
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "**Current Active System Prompt** - Shows and allows editing of the base prompt currently in use.\n\n**Note:** This field updates automatically when you change the preset above. Any manual edits will be overwritten when you select a different preset.\n\n**To customize:**\n- **For presets:** Use the 'Additional Custom Instructions' field below to add your requirements (they won't be overwritten)\n- **For custom mode:** Use the 'Additional Custom Instructions' field below to write your complete prompt\n\n**Available placeholders:**\n- `{userPrompt}` - The user's original prompt\n- `{languages}` - Detected programming languages\n- `{technologies}` - Detected frameworks/technologies\n- `{openFiles}` - Currently open files",
+          "markdownDescription": "**Current Active System Prompt** - Automatically updates when you change the preset above.\n\n**To customize:** Use 'Additional Custom Instructions' below (won't be overwritten by preset changes).\n\n**Placeholders:** `{userPrompt}`, `{languages}`, `{technologies}`, `{openFiles}`",
           "order": 1
         },
         "promptImprover.customSystemPrompt": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "**Additional Custom Instructions** - Add your own instructions that will be combined with the preset.\n\n**How it works:**\n- **When using presets** (General, Context-aware, Concise): Your custom instructions are appended to the preset\n- **When using Custom preset**: Only your custom instructions are used (preset is ignored)\n\nThis allows you to enhance presets with your own requirements without replacing them entirely.\n\n**Available placeholders:**\n- `{userPrompt}` - The user's original prompt\n- `{languages}` - Detected programming languages\n- `{technologies}` - Detected frameworks/technologies\n- `{openFiles}` - Currently open files",
+          "markdownDescription": "**Additional Custom Instructions** - Add your own instructions combined with the preset.\n\n**Presets mode:** Your instructions are appended to the preset  \n**Custom mode:** Only your instructions are used\n\n**Placeholders:** `{userPrompt}`, `{languages}`, `{technologies}`, `{openFiles}`",
           "order": 2
         },
         "promptImprover.modelFamily": {
           "type": "string",
           "default": "gpt-4o",
           "editPresentation": "singlelineText",
-          "markdownDescription": "**Model Family** - Specify which model to use for prompt improvement.\n\nLeave empty to use the default model, or enter a model family name.\n\n**[Select Model from Available Options](command:prompt-improver.selectModel)** - Click to choose from a live list of available models.\n\n**[List Available Models](command:prompt-improver.listAvailableModels)** - View all available models with their details.\n\nAlternatively, you can manually enter a model family name (e.g., `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`).",
+          "markdownDescription": "Specify which model to use for prompt improvement (e.g., `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`). Leave empty to use the default model.\n\n**Commands:**  \n[Select Model](command:prompt-improver.selectModel) | [List Available Models](command:prompt-improver.listAvailableModels)",
           "order": 3
         }
       }
@@ -147,16 +147,17 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.105.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
+    "@types/vscode": "^1.105.0",
     "@typescript-eslint/eslint-plugin": "^8.45.0",
     "@typescript-eslint/parser": "^8.45.0",
-    "eslint": "^9.36.0",
-    "esbuild": "^0.25.10",
-    "npm-run-all": "^4.1.5",
-    "typescript": "^5.9.3",
     "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.6.2",
+    "esbuild": "^0.25.10",
+    "eslint": "^9.36.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.3"
   }
 }

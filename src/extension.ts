@@ -395,8 +395,12 @@ async function handleImproveCommand(
 	stream.progress('Gathering workspace context...');
 	const workspaceContext = await gatherWorkspaceContext();
 
+	// Scan for relevant markdown context files
+	stream.progress('Scanning for relevant context files...');
+	const markdownContext = await scanRelevantMarkdownFiles(userPrompt);
+
 	// Build the prompt for the LLM
-	const systemPrompt = buildImprovePrompt(userPrompt, workspaceContext, overridePreset, references, conversationHistory);
+	const systemPrompt = buildImprovePrompt(userPrompt, workspaceContext, overridePreset, references, conversationHistory, markdownContext);
 
 	// Get the configured language model
 	const model = await getConfiguredModel();
@@ -664,6 +668,114 @@ function getSystemPrompt(overridePreset?: string): string {
 }
 
 /**
+ * Scan workspace for relevant markdown files that might provide context
+ */
+async function scanRelevantMarkdownFiles(userPrompt: string): Promise<MarkdownContext> {
+	const context: MarkdownContext = {
+		files: []
+	};
+
+	const workspaceFolders = vscode.workspace.workspaceFolders;
+	if (!workspaceFolders || workspaceFolders.length === 0) {
+		return context;
+	}
+
+	const workspaceRoot = workspaceFolders[0].uri;
+
+	// Priority markdown files to check (in order of importance)
+	const priorityFiles = [
+		'.github/copilot-instructions.md',
+		'.github/instructions/*.instructions.md',
+		'AGENTS.md',
+		'README.md',
+		'CONTRIBUTING.md',
+		'docs/README.md',
+		'documentation/README.md'
+	];
+
+	// Search for markdown files
+	const markdownFiles: vscode.Uri[] = [];
+
+	// First, check priority files
+	for (const pattern of priorityFiles) {
+		try {
+			const files = await vscode.workspace.findFiles(pattern, '**/node_modules/**', 10);
+			markdownFiles.push(...files);
+		} catch (error) {
+			// File pattern not found, continue
+		}
+	}
+
+	// Read and analyze files for relevance
+	const promptLower = userPrompt.toLowerCase();
+	const keywords = extractKeywords(promptLower);
+
+	for (const fileUri of markdownFiles) {
+		try {
+			const content = await vscode.workspace.fs.readFile(fileUri);
+			const text = Buffer.from(content).toString('utf8');
+
+			// Check if file content is relevant to the prompt
+			const relevanceScore = calculateRelevance(text.toLowerCase(), keywords);
+
+			if (relevanceScore > 0 || fileUri.path.includes('copilot-instructions') || fileUri.path.includes('AGENTS')) {
+				// Always include copilot-instructions and AGENTS files
+				// For other files, only include if relevant
+				const relativePath = vscode.workspace.asRelativePath(fileUri);
+
+				// Truncate long files to avoid token bloat
+				const truncatedContent = text.length > 2000 ? text.substring(0, 2000) + '\n\n[Content truncated...]' : text;
+
+				context.files.push({
+					path: relativePath,
+					content: truncatedContent,
+					relevanceScore
+				});
+			}
+		} catch (error) {
+			// Error reading file, skip it
+			console.error(`Error reading markdown file ${fileUri.path}:`, error);
+		}
+	}
+
+	// Sort by relevance score (highest first) and limit to top 3 files
+	context.files.sort((a, b) => b.relevanceScore - a.relevanceScore);
+	context.files = context.files.slice(0, 3);
+
+	return context;
+}
+
+/**
+ * Extract keywords from prompt for relevance matching
+ */
+function extractKeywords(text: string): string[] {
+	// Remove common words and extract meaningful keywords
+	const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'what', 'which', 'who', 'when', 'where', 'why', 'how']);
+
+	const words = text.split(/\s+/).filter(word =>
+		word.length > 2 && !commonWords.has(word)
+	);
+
+	return words;
+}
+
+/**
+ * Calculate relevance score based on keyword matches
+ */
+function calculateRelevance(content: string, keywords: string[]): number {
+	let score = 0;
+	for (const keyword of keywords) {
+		// Count occurrences of each keyword
+		const regex = new RegExp(keyword, 'gi');
+		const matches = content.match(regex);
+		if (matches) {
+			score += matches.length;
+		}
+	}
+	return score;
+}
+
+/**
  * Extract conversation history from chat context
  */
 function extractConversationHistory(context: vscode.ChatContext): ConversationHistory {
@@ -709,7 +821,8 @@ function buildImprovePrompt(
 	workspaceContext: WorkspaceContext,
 	overridePreset?: string,
 	references?: readonly vscode.ChatPromptReference[],
-	conversationHistory?: ConversationHistory
+	conversationHistory?: ConversationHistory,
+	markdownContext?: MarkdownContext
 ): string {
 	const systemPromptTemplate = getSystemPrompt(overridePreset);
 
@@ -771,6 +884,19 @@ function buildImprovePrompt(
 		}
 	}
 
+	// Format markdown context files if any
+	let markdownContextSection = '';
+	if (markdownContext && markdownContext.files.length > 0) {
+		markdownContextSection = '\n\n**Project Documentation & Instructions:**\n';
+		markdownContextSection += 'The following documentation files provide context about the project:\n\n';
+
+		for (const file of markdownContext.files) {
+			markdownContextSection += `--- ${file.path} ---\n${file.content}\n\n`;
+		}
+
+		markdownContextSection += 'Use the information from these files to make the improved prompt more specific and aligned with project conventions.\n';
+	}
+
 	// Replace placeholders in the system prompt
 	let systemPrompt = systemPromptTemplate
 		.replace(/\{userPrompt\}/g, userPrompt)
@@ -787,7 +913,7 @@ ${userPrompt}
 **Workspace Context:**
 - Programming Languages: ${languages}
 - Frameworks/Technologies: ${technologies}
-- Open Files: ${openFiles}${referencesContext}${historyContext}
+- Open Files: ${openFiles}${referencesContext}${historyContext}${markdownContextSection}
 
 Return the improved prompt now (plain text only, no markdown formatting, no wrapper text):`;
 }
@@ -930,6 +1056,14 @@ interface ConversationHistory {
 		command?: string;
 	}>;
 	responses: string[];
+}
+
+interface MarkdownContext {
+	files: Array<{
+		path: string;
+		content: string;
+		relevanceScore: number;
+	}>;
 }
 
 // This method is called when your extension is deactivated
