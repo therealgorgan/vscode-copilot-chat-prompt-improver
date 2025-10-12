@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Generator</title>
+</head>
+<body>
+    <canvas id="canvas" width="128" height="128"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Background circle
+        ctx.fillStyle = '#007ACC';
+        ctx.beginPath();
+        ctx.arc(64, 64, 60, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Pencil body
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(85, 30);
+        ctx.lineTo(98, 43);
+        ctx.lineTo(55, 86);
+        ctx.lineTo(42, 86);
+        ctx.lineTo(42, 73);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Pencil tip
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.moveTo(85, 30);
+        ctx.lineTo(92, 23);
+        ctx.lineTo(105, 36);
+        ctx.lineTo(98, 43);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // Sparkle 1
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.moveTo(35, 35);
+        ctx.lineTo(37, 42);
+        ctx.lineTo(44, 44);
+        ctx.lineTo(37, 46);
+        ctx.lineTo(35, 53);
+        ctx.lineTo(33, 46);
+        ctx.lineTo(26, 44);
+        ctx.lineTo(33, 42);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Sparkle 2
+        ctx.beginPath();
+        ctx.moveTo(90, 65);
+        ctx.lineTo(92, 72);
+        ctx.lineTo(99, 74);
+        ctx.lineTo(92, 76);
+        ctx.lineTo(90, 83);
+        ctx.lineTo(88, 76);
+        ctx.lineTo(81, 74);
+        ctx.lineTo(88, 72);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Text lines
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.fillRect(30, 95, 35, 4);
+        ctx.fillRect(30, 103, 45, 4);
+        ctx.fillRect(30, 111, 30, 4);
+        
+        // Download as PNG
+        canvas.toBlob(function(blob) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'icon.png';
+            a.click();
+        });
+    </script>
+    <p>Icon will download automatically. If not, right-click the canvas and "Save Image As..."</p>
+</body>
+</html>

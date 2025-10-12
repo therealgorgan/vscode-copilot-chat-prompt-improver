@@ -1,0 +1,17 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#007ACC"/>
+  
+  <!-- Pencil/Edit icon representing "improvement" -->
+  <path d="M85 30L98 43L55 86L42 86L42 73L85 30Z" fill="white" stroke="white" stroke-width="2"/>
+  <path d="M85 30L92 23L105 36L98 43L85 30Z" fill="#FFD700" stroke="white" stroke-width="2"/>
+  
+  <!-- Sparkle/Magic effect (representing AI improvement) -->
+  <path d="M35 35L37 42L44 44L37 46L35 53L33 46L26 44L33 42L35 35Z" fill="#FFD700"/>
+  <path d="M90 65L92 72L99 74L92 76L90 83L88 76L81 74L88 72L90 65Z" fill="#FFD700"/>
+  
+  <!-- Text lines representing prompt -->
+  <rect x="30" y="95" width="35" height="4" rx="2" fill="white" opacity="0.8"/>
+  <rect x="30" y="103" width="45" height="4" rx="2" fill="white" opacity="0.8"/>
+  <rect x="30" y="111" width="30" height="4" rx="2" fill="white" opacity="0.8"/>
+</svg>
