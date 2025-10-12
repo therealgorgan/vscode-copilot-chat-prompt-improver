@@ -33,8 +33,8 @@ export function activate(context: vscode.ExtensionContext) {
 	const configChangeListener = vscode.workspace.onDidChangeConfiguration(e => {
 		if (e.affectsConfiguration('promptImprover.systemPromptPreset')) {
 			const config = vscode.workspace.getConfiguration('promptImprover');
-			const preset = config.get<string>('systemPromptPreset', 'detailed');
-			const presetContent = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['detailed'];
+			const preset = config.get<string>('systemPromptPreset', 'balanced');
+			const presetContent = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['balanced'];
 
 			// Update the systemPrompt field to show the current preset content
 			// This allows users to see what the preset contains in the Settings UI
@@ -46,8 +46,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Initialize systemPrompt with current preset content if it's empty or contains old preset
 	const currentSystemPrompt = config.get<string>('systemPrompt', '');
-	const currentPreset = config.get<string>('systemPromptPreset', 'detailed');
-	const currentPresetContent = SYSTEM_PROMPT_PRESETS[currentPreset] || SYSTEM_PROMPT_PRESETS['detailed'];
+	const currentPreset = config.get<string>('systemPromptPreset', 'balanced');
+	const currentPresetContent = SYSTEM_PROMPT_PRESETS[currentPreset] || SYSTEM_PROMPT_PRESETS['balanced'];
 
 	// If systemPrompt is empty or doesn't match any current preset, set it to the current preset
 	const allCurrentPresets = Object.values(SYSTEM_PROMPT_PRESETS);
@@ -1216,11 +1216,11 @@ Return ONLY the comprehensive improved prompt text - no meta-commentary, quotes,
  */
 function getSystemPrompt(overridePreset?: string): string {
 	const config = vscode.workspace.getConfiguration('promptImprover');
-	const preset = overridePreset || config.get<string>('systemPromptPreset', 'detailed');
+	const preset = overridePreset || config.get<string>('systemPromptPreset', 'balanced');
 
 	// Get the preset content, or use the manually edited systemPrompt if it differs from presets
 	const currentSystemPrompt = config.get<string>('systemPrompt', '');
-	const presetPrompt = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['detailed'];
+	const presetPrompt = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['balanced'];
 
 	// If user has manually edited the systemPrompt field, use that instead
 	const presetPrompts = Object.values(SYSTEM_PROMPT_PRESETS);

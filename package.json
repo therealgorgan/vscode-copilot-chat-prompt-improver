@@ -2,7 +2,7 @@
   "name": "prompt-improver",
   "displayName": "Prompt Improver",
   "description": "Improve your Copilot Chat prompts using AI and workspace context",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "publisher": "TheRealGorgan",
   "author": {
     "name": "The Real Gorgan",
@@ -53,20 +53,16 @@
             "description": "Analyze and improve a chat prompt"
           },
           {
-            "name": "improve-general",
-            "description": "Improve prompt using the General preset"
-          },
-          {
-            "name": "improve-context",
-            "description": "Improve prompt using the Context-aware preset"
-          },
-          {
             "name": "improve-concise",
             "description": "Improve prompt using the Concise preset"
           },
           {
-            "name": "improve-custom",
-            "description": "Improve prompt using your Custom preset"
+            "name": "improve-balanced",
+            "description": "Improve prompt using the Balanced preset"
+          },
+          {
+            "name": "improve-detailed",
+            "description": "Improve prompt using the Detailed preset"
           },
           {
             "name": "analyze",
@@ -100,58 +96,70 @@
       "properties": {
         "promptImprover.systemPromptPreset": {
           "type": "string",
-          "default": "context-aware",
+          "default": "balanced",
           "enum": [
-            "general",
-            "context-aware",
             "concise",
-            "custom"
+            "balanced",
+            "detailed"
           ],
-          "enumDescriptions": [
-            "General improvement - Balanced approach for any coding prompt",
-            "Context-aware - Uses workspace context internally to provide specific, detailed improvements based on your actual codebase (files, classes, functions, patterns)",
-            "Concise - Quick improvements with minimal overhead",
-            "Custom - Use only your custom instructions (no preset)"
-          ],
-          "description": "Choose a preset system prompt or use 'custom' for your own instructions. Changes take effect immediately.",
+          "markdownDescription": "Choose the improvement style. **All presets receive the same rich context** (workspace, Git, conversation, files) - they differ in how much detail they add:\n\n- **Concise**: Minimal elaboration, focused improvements (fastest)\n- **Balanced**: Good detail without over-engineering (recommended)\n- **Detailed**: Comprehensive, production-ready specifications (most thorough)\n\n**Note:** Context inclusion is controlled by the settings below, not by the preset.",
           "order": 0
         },
         "promptImprover.systemPrompt": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "**Current Active System Prompt** - Automatically updates when you change the preset above.\n\n**To customize:** Use 'Additional Custom Instructions' below (won't be overwritten by preset changes).\n\n**Placeholders:** `{userPrompt}`, `{languages}`, `{technologies}`, `{openFiles}`",
+          "markdownDescription": "**View/Edit System Prompt** - Shows the current preset content. You can edit this directly to create a custom prompt.\n\n**Editing this field:** Your changes will be preserved and used instead of the preset.\n\n**Available placeholders:** `{userPrompt}`, `{languages}`, `{technologies}`, `{openFiles}`",
           "order": 1
-        },
-        "promptImprover.customSystemPrompt": {
-          "type": "string",
-          "default": "",
-          "editPresentation": "multilineText",
-          "markdownDescription": "**Additional Custom Instructions** - Add your own instructions combined with the preset.\n\n**Presets mode:** Your instructions are appended to the preset  \n**Custom mode:** Only your instructions are used\n\n**Placeholders:** `{userPrompt}`, `{languages}`, `{technologies}`, `{openFiles}`",
-          "order": 2
         },
         "promptImprover.modelFamily": {
           "type": "string",
           "default": "",
           "editPresentation": "singlelineText",
           "markdownDescription": "**Model Selection:** Specify which model to use for prompt improvement, or leave empty to use the current chat model.\n\n**Leave empty** (recommended): Uses whatever model you have selected in Copilot Chat (falls back to gpt-4o-mini if no model is selected)  \n**Specify a model**: Always use a specific model (e.g., `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`)\n\n**Default fallback**: gpt-4o-mini (fastest, free with Copilot subscription)\n\n**Commands:**  \n[Select Model](command:prompt-improver.selectModel) | [List Available Models](command:prompt-improver.listAvailableModels)",
+          "order": 2
+        },
+        "promptImprover.includeWorkspaceMetadata": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Include Workspace Metadata** - Detects languages, frameworks, and open file names from your workspace.\n\n**Why:** Improved prompts reference your actual tech stack (e.g., \"using React and TypeScript\"). **Impact:** Fast, always recommended.",
           "order": 3
         },
-        "promptImprover.contextRichness": {
-          "type": "string",
-          "default": "rich",
-          "enum": [
-            "minimal",
-            "auto",
-            "rich"
-          ],
-          "enumDescriptions": [
-            "Minimal - Only basic workspace metadata (languages, technologies, open files)",
-            "Auto - Smart context based on preset (minimal for general/concise, rich for context-aware)",
-            "Rich - Always include full context (conversation history, markdown files, all available context)"
-          ],
-          "markdownDescription": "Control how much context is gathered and included in prompt improvements.\n\n**Minimal:** Fast, basic metadata only  \n**Auto:** Smart defaults based on your preset choice  \n**Rich:** Maximum context for best results (may be slower)",
+        "promptImprover.includeConversationHistory": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Include Conversation History** - Summarizes previous chat messages to understand what you've been working on.\n\n**Why:** Improved prompts are aware of recent work and decisions. **When to disable:** Starting a new topic. **Impact:** Fast (intelligent summarization).",
           "order": 4
+        },
+        "promptImprover.includeMarkdownFiles": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Include Markdown Files** - Scans workspace for documentation, design docs, API specs, and guides.\n\n**Why:** Improved prompts reference your actual project docs. **When to disable:** No project docs or large repos (slow). **Impact:** Moderate cost—scans all .md files.",
+          "order": 5
+        },
+        "promptImprover.includeOpenFileContents": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Include Open File Synopsis** - Intelligently extracts imports, exports, classes, functions, and types from open files.\n\n**Why:** Improved prompts reference your actual code patterns. **When to disable:** Many large files open. **Impact:** Moderate cost, high value for code consistency.",
+          "order": 6
+        },
+        "promptImprover.includeGitContext": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Include Git Context** - Detects current branch, recent commits, and uncommitted changes.\n\n**Why:** Improved prompts align with your current work. **When to disable:** Non-git projects. **Impact:** Fast (10s timeout), lightweight.",
+          "order": 7
+        },
+        "promptImprover.useWorkspaceTools": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "**Use Workspace Tools** - Grants the prompt improver access to search your codebase and read files.\n\n**Why:** Deeply contextual prompts based on actual code. **When to disable:** Privacy concerns or large workspaces (slow). **Impact:** High cost—actively searches workspace.",
+          "order": 8
+        },
+        "promptImprover.filterWorkspaceTools": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Filter Workspace Tools** - Limits workspace tool access to only file/directory operations (removes grep/semantic search).\n\n**Why:** Faster responses, lower cost while maintaining code access. **When to enable:** Always, unless you need deep search. **Impact:** Reduces tool overhead significantly.",
+          "order": 9
         }
       }
     }
