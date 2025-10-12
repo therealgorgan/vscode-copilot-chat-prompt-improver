@@ -130,7 +130,6 @@
           "markdownDescription": "**Current System Prompt** - View or edit the prompt used for improvements.\n\nThis field displays the active preset's content. When you make changes here, the preset will automatically switch to 'custom'.\n\n**Available placeholders:**\n- `{userPrompt}` - The user's original prompt\n- `{languages}` - Detected programming languages\n- `{technologies}` - Detected frameworks/technologies\n- `{openFiles}` - Currently open files",
           "order": 1
         },
-        },
         "promptImprover.customSystemPrompt": {
           "type": "string",
           "default": "",
@@ -138,9 +137,6 @@
           "markdownDescription": "⚠️ **Internal use only** - This stores your custom prompt when using the 'custom' preset. Edit the 'System Prompt' field above instead.",
           "order": 99
         }
-      }
-    }
-  },
       }
     }
   },
