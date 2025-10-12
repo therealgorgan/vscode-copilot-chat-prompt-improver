@@ -2,8 +2,50 @@
 
 All notable changes to the "prompt-improver" extension will be documented in this file.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+## [0.0.4] - 2025-10-12
 
-## [Unreleased]
+### Added
+- **System Prompt Presets**: Choose between different improvement styles
+  - General Improvement - Balanced approach without workspace context
+  - Context-Aware (Default) - Leverages workspace languages, frameworks, and open files
+  - Concise - Quick improvements with minimal overhead
+  - Custom - Create your own system prompt with placeholders
+- New settings:
+  - `promptImprover.systemPromptPreset` - Select preset style
+  - `promptImprover.customSystemPrompt` - Define custom improvement instructions
+- Detailed preset documentation in PRESETS.md
 
+### Changed
+- Deprecated `promptImprover.systemPrompt` in favor of preset system (backward compatible)
+- Improved token efficiency with lighter preset options
+
+## [0.0.3] - 2025-10-12
+
+### Added
+- Configurable system prompt in extension settings
+- Copy to clipboard functionality with metadata stripping
+- Model selection settings (vendor and family)
+
+### Changed
+- Moved improvement instructions to settings for better customization
+- Set `isSticky: false` to auto-clear @prompt-improver mention after use
+- Inline output (removed code block wrapping)
+
+## [0.0.2] - 2025-10-12
+
+### Added
+- GitHub Actions workflow for CI/CD
+- Extension icon (PNG format for marketplace)
+
+### Fixed
+- Node.js version compatibility (requires >= 20)
+
+## [0.0.1] - 2025-10-12
+
+### Added
 - Initial release
+- @prompt-improver chat participant
+- /improve command for prompt enhancement
+- /analyze command for prompt analysis
+- Workspace context gathering (languages, technologies, open files)
+- GitHub Copilot Language Model API integration

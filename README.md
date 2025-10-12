@@ -4,13 +4,28 @@ A VS Code extension that helps you write better prompts for GitHub Copilot Chat 
 
 ## Features
 
-ÔøΩÔøΩ **Intelligent Prompt Improvement** - Analyzes and improves your chat prompts to get better AI responses
+üß† **Intelligent Prompt Improvement** - Analyzes and improves your chat prompts to get better AI responses
 
-Ì¥ç **Workspace-Aware** - Automatically incorporates context from your open files, programming languages, and project structure
+üéØ **Multiple Presets** - Choose between General, Context-Aware, or Concise improvement styles, or create your own custom preset
 
-Ì≥ä **Prompt Analysis** - Explains what makes a prompt effective and provides specific recommendations
+üîç **Workspace-Aware** - Automatically incorporates context from your open files, programming languages, and project structure
 
-Ì≤° **Smart Suggestions** - Provides follow-up questions to help you iterate on your prompts
+üìä **Prompt Analysis** - Explains what makes a prompt effective and provides specific recommendations
+
+üí° **Smart Suggestions** - Provides follow-up questions to help you iterate on your prompts
+
+üìã **One-Click Copy** - Copy improved prompts to clipboard with metadata automatically stripped
+
+## System Prompt Presets
+
+Choose the improvement style that fits your needs:
+
+- **General Improvement** - Balanced approach for any coding prompt (no workspace context)
+- **Context-Aware** (Default) - Leverages your workspace languages, frameworks, and open files
+- **Concise** - Quick improvements with minimal overhead
+- **Custom** - Create your own system prompt with placeholders
+
+[Learn more about presets ‚Üí](PRESETS.md)
 
 ## Usage
 
@@ -140,6 +155,53 @@ npm test
 | /improve | Improve a prompt (default command) |
 | /analyze | Analyze what makes a prompt effective |
 
+## Configuration
+
+### System Prompt Preset
+
+Choose the improvement style that best fits your workflow:
+
+```json
+{
+  "promptImprover.systemPromptPreset": "context-aware"
+}
+```
+
+**Options:**
+- `"general"` - Balanced approach without workspace context
+- `"context-aware"` (default) - Incorporates workspace languages, frameworks, and open files
+- `"concise"` - Minimal overhead for quick improvements
+- `"custom"` - Use your own system prompt
+
+### Model Selection
+
+Choose which AI model to use for prompt improvement:
+
+```json
+{
+  "promptImprover.modelVendor": "copilot",
+  "promptImprover.modelFamily": "gpt-4o"
+}
+```
+
+### Custom System Prompt
+
+Create your own improvement instructions (when preset is set to `"custom"`):
+
+```json
+{
+  "promptImprover.customSystemPrompt": "Your custom prompt here..."
+}
+```
+
+**Available placeholders:**
+- `{userPrompt}` - The original prompt
+- `{languages}` - Detected programming languages
+- `{technologies}` - Detected frameworks/technologies
+- `{openFiles}` - Currently open files
+
+[View detailed preset documentation ‚Üí](PRESETS.md)
+
 ## Tips for Better Prompts
 
 ‚úÖ **Be Specific**: Instead of "create a function", say "create a TypeScript function that validates email addresses using regex"
@@ -171,4 +233,4 @@ Found a bug or have a feature request? Please open an issue on GitHub.
 
 ---
 
-**Enjoy better prompts and better AI responses!** Ì∫Ä
+**Enjoy better prompts and better AI responses!** ÔøΩÔøΩÔøΩ
