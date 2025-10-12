@@ -2,6 +2,20 @@
 
 All notable changes to the "prompt-improver" extension will be documented in this file.
 
+## [0.0.5] - 2025-10-12
+
+### Added
+- **Dynamic System Prompt Editing**: The "System Prompt" setting now displays the current preset's content and can be edited directly
+- **Auto-Switch to Custom**: When you edit the system prompt, the preset automatically switches to "custom"
+- **Model List Command**: New command "List Available Copilot Models" to see all models available in your environment
+- **Improved Model Selection**: Removed hardcoded model list - now uses whatever models are available via Copilot
+- **Settings Ordering**: System prompt settings now appear at the top for easier access
+
+### Changed
+- Reorganized settings for better user experience
+- `promptImprover.customSystemPrompt` is now an internal setting (edit `systemPrompt` instead)
+- Removed enum constraints on `modelFamily` to support all available models
+
 ## [0.0.4] - 2025-10-12
 
 ### Added
