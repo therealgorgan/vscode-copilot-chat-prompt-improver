@@ -128,6 +128,22 @@
           "editPresentation": "singlelineText",
           "markdownDescription": "Specify which model to use for prompt improvement (e.g., `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`). Leave empty to use the default model.\n\n**Commands:**  \n[Select Model](command:prompt-improver.selectModel) | [List Available Models](command:prompt-improver.listAvailableModels)",
           "order": 3
+        },
+        "promptImprover.contextRichness": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "minimal",
+            "auto",
+            "rich"
+          ],
+          "enumDescriptions": [
+            "Minimal - Only basic workspace metadata (languages, technologies, open files)",
+            "Auto - Smart context based on preset (minimal for general/concise, rich for context-aware)",
+            "Rich - Always include full context (conversation history, markdown files, all available context)"
+          ],
+          "markdownDescription": "Control how much context is gathered and included in prompt improvements.\n\n**Minimal:** Fast, basic metadata only  \n**Auto:** Smart defaults based on your preset choice  \n**Rich:** Maximum context for best results (may be slower)",
+          "order": 4
         }
       }
     }

@@ -388,16 +388,27 @@ async function handleImproveCommand(
 	// Extract any references (like #file, @workspace, etc.)
 	const references = request.references || [];
 
-	// Extract conversation history
-	const conversationHistory = extractConversationHistory(context);
+	// Determine context richness based on settings and preset
+	const config = vscode.workspace.getConfiguration('promptImprover');
+	const contextRichness = config.get<string>('contextRichness', 'auto');
+	const shouldGatherRichContext = determineContextRichness(contextRichness, overridePreset);
 
-	// Gather workspace context
+	// Gather workspace context (always needed for basic info)
 	stream.progress('Gathering workspace context...');
 	const workspaceContext = await gatherWorkspaceContext();
 
-	// Scan for relevant markdown context files
-	stream.progress('Scanning for relevant context files...');
-	const markdownContext = await scanRelevantMarkdownFiles(userPrompt);
+	// Conditionally gather rich context based on settings
+	let conversationHistory: ConversationHistory | undefined;
+	let markdownContext: MarkdownContext | undefined;
+
+	if (shouldGatherRichContext) {
+		// Extract conversation history
+		conversationHistory = extractConversationHistory(context);
+
+		// Scan for relevant markdown context files
+		stream.progress('Scanning for relevant context files...');
+		markdownContext = await scanRelevantMarkdownFiles(userPrompt);
+	}
 
 	// Build the prompt for the LLM
 	const systemPrompt = buildImprovePrompt(userPrompt, workspaceContext, overridePreset, references, conversationHistory, markdownContext);
@@ -410,8 +421,7 @@ async function handleImproveCommand(
 		return;
 	}
 
-	// Determine the active preset
-	const config = vscode.workspace.getConfiguration('promptImprover');
+	// Determine the active preset (reuse config from above)
 	const activePreset = overridePreset || config.get<string>('systemPromptPreset', 'context-aware');
 	const useWorkspaceContext = activePreset === 'context-aware';
 
@@ -668,6 +678,25 @@ function getSystemPrompt(overridePreset?: string): string {
 }
 
 /**
+ * Determine whether to gather rich context based on settings and preset
+ */
+function determineContextRichness(contextRichness: string, preset?: string): boolean {
+	// Explicit user choice
+	if (contextRichness === 'rich') {
+		return true;
+	}
+	if (contextRichness === 'minimal') {
+		return false;
+	}
+
+	// Auto mode: decide based on preset
+	// Use rich context for context-aware preset, minimal for others
+	const activePreset = preset || vscode.workspace.getConfiguration('promptImprover').get<string>('systemPromptPreset', 'context-aware');
+
+	return activePreset === 'context-aware';
+}
+
+/**
  * Scan workspace for relevant markdown files that might provide context
  */
 async function scanRelevantMarkdownFiles(userPrompt: string): Promise<MarkdownContext> {
@@ -679,8 +708,6 @@ async function scanRelevantMarkdownFiles(userPrompt: string): Promise<MarkdownCo
 	if (!workspaceFolders || workspaceFolders.length === 0) {
 		return context;
 	}
-
-	const workspaceRoot = workspaceFolders[0].uri;
 
 	// Priority markdown files to check (in order of importance)
 	const priorityFiles = [
