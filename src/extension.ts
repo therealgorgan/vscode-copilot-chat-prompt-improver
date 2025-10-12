@@ -16,8 +16,20 @@ export function activate(context: vscode.ExtensionContext) {
 	console.log('Prompt Improver extension is now active!');
 
 	// Register the copy command
+	const stripImprovedPrompt = (text: string) => {
+		if (!text) { return ''; }
+		// Clean up any wrapper quotes, markdown formatting, or extra whitespace
+		let cleaned = text.trim();
+		// Remove surrounding quotes if present
+		cleaned = cleaned.replace(/^["']|["']$/g, '');
+		// Remove any "Improved Prompt:" headers that might slip through
+		cleaned = cleaned.replace(/^.*Improved Prompt.*?:\s*/i, '');
+		return cleaned.trim();
+	};
+
 	const copyCommand = vscode.commands.registerCommand('prompt-improver.copyImprovedPrompt', async (improvedPrompt: string) => {
-		await vscode.env.clipboard.writeText(improvedPrompt);
+		const onlyPrompt = stripImprovedPrompt(improvedPrompt);
+		await vscode.env.clipboard.writeText(onlyPrompt);
 		vscode.window.showInformationMessage('✅ Improved prompt copied to clipboard!');
 	});
 
@@ -44,6 +56,35 @@ export function activate(context: vscode.ExtensionContext) {
 	};
 
 	context.subscriptions.push(participant, copyCommand);
+}
+
+/**
+ * Get the configured language model based on user settings
+ */
+async function getConfiguredModel(): Promise<vscode.LanguageModelChat | undefined> {
+	const config = vscode.workspace.getConfiguration('promptImprover');
+	const vendor = config.get<string>('modelVendor', 'copilot');
+	const family = config.get<string>('modelFamily', 'gpt-4o');
+
+	// Build selector options
+	const selector: { vendor?: string; family?: string } = {};
+	
+	if (vendor !== 'auto') {
+		selector.vendor = vendor;
+	}
+	
+	if (family && family.trim() !== '') {
+		selector.family = family;
+	}
+
+	// Select models
+	const models = await vscode.lm.selectChatModels(selector);
+	
+	if (models.length === 0) {
+		return undefined;
+	}
+
+	return models[0];
 }
 
 /**
@@ -108,18 +149,13 @@ async function handleImproveCommand(
 	// Build the prompt for the LLM
 	const systemPrompt = buildImprovePrompt(userPrompt, workspaceContext);
 
-	// Get the language model
-	const models = await vscode.lm.selectChatModels({
-		vendor: 'copilot',
-		family: 'gpt-4o'
-	});
+	// Get the configured language model
+	const model = await getConfiguredModel();
 
-	if (models.length === 0) {
-		stream.markdown('⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated.');
+	if (!model) {
+		stream.markdown('⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated, or check your model settings.');
 		return;
 	}
-
-	const model = models[0];
 
 	// Create messages for the LLM
 	const messages = [
@@ -136,21 +172,24 @@ async function handleImproveCommand(
 	
 	// Stream the response
 	stream.markdown('## Improved Prompt\n\n');
+	stream.markdown('```\n');
 	for await (const fragment of chatResponse.text) {
 		improvedPrompt += fragment;
 		stream.markdown(fragment);
 	}
+	stream.markdown('\n```\n');
 
 	stream.markdown('\n\n---\n\n');
 	
-	// Add a copy button
+	// Add a copy button - strip any remaining quotes or wrapper text
+	const cleanPrompt = improvedPrompt.trim().replace(/^["']|["']$/g, '');
 	stream.button({
 		command: 'prompt-improver.copyImprovedPrompt',
 		title: vscode.l10n.t('📋 Copy to Clipboard'),
-		arguments: [improvedPrompt]
+		arguments: [cleanPrompt]
 	});
 	
-	stream.markdown('\n\n💡 **Tip:** Click the button above to copy, or select the text and use Ctrl+C.\n');
+	stream.markdown('\n\n💡 **Tip:** Click the button above to copy, or select the text from the code block and use Ctrl+C.\n');
 }
 
 /**
@@ -175,18 +214,13 @@ async function handleAnalyzeCommand(
 	// Build the analysis prompt
 	const analysisPrompt = buildAnalysisPrompt(userPrompt);
 
-	// Get the language model
-	const models = await vscode.lm.selectChatModels({
-		vendor: 'copilot',
-		family: 'gpt-4o'
-	});
+	// Get the configured language model
+	const model = await getConfiguredModel();
 
-	if (models.length === 0) {
-		stream.markdown('⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated.');
+	if (!model) {
+		stream.markdown('⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated, or check your model settings.');
 		return;
 	}
-
-	const model = models[0];
 
 	const messages = [
 		vscode.LanguageModelChatMessage.User(analysisPrompt)
@@ -227,8 +261,7 @@ ${userPrompt}
    - Adding relevant context from the workspace when appropriate
    - Including best practices or constraints that would help
    - Structuring it for better readability
-3. Present ONLY the improved prompt in a clear, actionable format
-4. After the improved prompt, add a brief "Key Improvements" section explaining what was changed
+3. Return ONLY the improved prompt text itself - no headers, no quotes, no explanations, no "Key Improvements" section
 
 **Important:** Focus on making the prompt work better with coding assistants. Consider:
 - Technical precision
@@ -237,7 +270,7 @@ ${userPrompt}
 - Relevant constraints
 - Expected output format
 
-Provide the improved prompt now:`;
+Return the improved prompt now (plain text only, no markdown formatting, no wrapper text):`;
 }
 
 /**

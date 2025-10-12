@@ -30,7 +30,7 @@
         "name": "prompt-improver",
         "fullName": "Prompt Improver",
         "description": "Improve your chat prompts with AI and workspace context",
-        "isSticky": true,
+        "isSticky": false,
         "commands": [
           {
             "name": "improve",
@@ -54,7 +54,27 @@
           }
         ]
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Prompt Improver",
+      "properties": {
+        "promptImprover.modelVendor": {
+          "type": "string",
+          "default": "copilot",
+          "enum": ["copilot", "auto"],
+          "enumDescriptions": [
+            "Use GitHub Copilot models",
+            "Use any available model provider"
+          ],
+          "description": "Select which language model vendor to use for prompt improvement"
+        },
+        "promptImprover.modelFamily": {
+          "type": "string",
+          "default": "gpt-4o",
+          "description": "Model family to use (e.g., 'gpt-4o', 'gpt-4o-mini', 'gpt-4'). Leave empty to use the default model."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
