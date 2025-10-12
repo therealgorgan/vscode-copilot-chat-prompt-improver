@@ -1,109 +1,373 @@
-# Prompt Improver - VS Code Extension
+# Prompt Improver for VS Code
 
-A VS Code extension that helps you write better prompts for GitHub Copilot Chat using AI analysis and workspace context.
+> Transform vague prompts into clear, actionable requests that produce better AI-generated code.
 
-## Features
+A VS Code extension that analyzes and improves your GitHub Copilot Chat prompts using AI and rich workspace context.
 
-🧠 **Intelligent Prompt Improvement** - Analyzes and improves your chat prompts to get better AI responses
+[![Version](https://img.shields.io/badge/version-0.0.6-blue.svg)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-🎯 **Multiple Presets** - Choose between General, Context-Aware, or Concise improvement styles, or create your own custom preset
+---
 
-🔍 **Workspace-Aware** - Automatically incorporates context from your open files, programming languages, and project structure
+## ✨ Features
 
-📊 **Prompt Analysis** - Explains what makes a prompt effective and provides specific recommendations
+| Feature | Description |
+|---------|-------------|
+| 🧠 **Intelligent Improvement** | AI-powered prompt analysis and enhancement |
+| 🎯 **Three Presets** | Concise, Balanced, or Detailed improvement styles |
+| 🔍 **Rich Context** | Workspace metadata, Git status, open files, conversation history |
+| 📊 **Prompt Analysis** | Understand what makes prompts effective |
+| 🔄 **Agent Handoff** | Seamlessly transition to new chats without losing context |
+| 📋 **One-Click Copy** | Copy improved prompts instantly |
+| 🛡️ **Robust Error Handling** | Graceful degradation and user-friendly error messages |
+| ⚙️ **Granular Control** | Enable/disable specific context types |
 
-💡 **Smart Suggestions** - Provides follow-up questions to help you iterate on your prompts
+---
 
-📋 **One-Click Copy** - Copy improved prompts to clipboard with metadata automatically stripped
+## 📚 Documentation
 
-## System Prompt Presets
+| Document | Description |
+|----------|-------------|
+| **[Quick Start](#-quick-start)** | Get started in 2 minutes |
+| **[Preset Comparison](PRESET_COMPARISON.md)** | Detailed comparison of Concise, Balanced, and Detailed presets |
+| **[Error Handling](ERROR_HANDLING.md)** | Comprehensive error handling guide |
+| **[Changelog](CHANGELOG.md)** | Version history and updates |
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+**From VSIX (Development):**
+1. Clone this repository
+2. Run `npm install`
+3. Run `npm run package`
+4. In VS Code: Extensions → "..." → Install from VSIX
+5. Select the generated `.vsix` file
+
+**From Marketplace (Coming Soon):**
+Search for "Prompt Improver" in VS Code Extensions.
+
+### Basic Usage
+
+**Improve a prompt:**
+```
+@prompt-improver write a login function
+```
+
+**Analyze a prompt:**
+```
+@prompt-improver /analyze create a REST API with authentication
+```
+
+**Create a handoff prompt:**
+```
+@prompt-improver /handoff
+```
+
+---
+
+## 🎯 Preset Styles
 
 Choose the improvement style that fits your needs:
 
-- **General Improvement** - Balanced approach for any coding prompt (no workspace context)
-- **Context-Aware** (Default) - Leverages your workspace languages, frameworks, and open files
-- **Concise** - Quick improvements with minimal overhead
-- **Custom** - Create your own system prompt with placeholders
+| Preset | Speed | Detail Level | Best For |
+|--------|-------|--------------|----------|
+| **Concise** | ⚡ Fastest | Minimal | Quick iterations, simple prompts |
+| **Balanced** | ⚡ Fast | Moderate | Most coding tasks (recommended) |
+| **Detailed** | 🔄 Moderate | Extensive | Complex/production-critical tasks |
 
-[Learn more about presets →](PRESETS.md)
+**All presets receive the same rich context:**
+- Programming languages & frameworks
+- Open files with intelligent code synopsis
+- Git context (branch, status, commits, staged changes)
+- Conversation history
+- Project documentation (markdown files)
+- User-provided references (#file, @workspace)
 
-## Usage
+**The difference is in how each preset uses this context.**
 
-### Improving a Prompt
+📖 **[Read the full preset comparison →](PRESET_COMPARISON.md)**
 
-Use the @prompt-improver participant in the chat to improve your prompts:
+## 📖 Commands
 
+### `/improve` - Improve a Prompt (Default)
+
+Transforms your prompt into a clear, actionable request.
+
+**Usage:**
 ```
 @prompt-improver write a function
-```
-
-Or use the /improve command explicitly:
-
-```
 @prompt-improver /improve create a REST API
 ```
 
-The extension will:
-1. Analyze your original prompt
-2. Gather relevant context from your workspace (languages, frameworks, open files)
-3. Generate an improved, more specific prompt
-4. Explain what improvements were made
-
-### Analyzing a Prompt
-
-Want to understand what makes a prompt effective? Use the /analyze command:
-
+**With preset override:**
 ```
-@prompt-improver /analyze create a REST API with proper error handling and authentication
+@prompt-improver /concise add error handling
+@prompt-improver /balanced create a component
+@prompt-improver /detailed implement authentication
 ```
 
-This will provide:
-- Strengths of the prompt
-- Areas for improvement
-- Specificity analysis
-- Context evaluation
-- Actionable recommendations
+**What it does:**
+1. Analyzes your original prompt
+2. Gathers rich context (workspace, Git, files, conversation)
+3. Generates an improved, more specific prompt
+4. Provides a copy button for easy use
 
-## Examples
+---
 
-### Before
+### `/analyze` - Analyze Prompt Effectiveness
+
+Explains what makes a prompt effective and provides recommendations.
+
+**Usage:**
+```
+@prompt-improver /analyze create a REST API with proper error handling
+```
+
+**Provides:**
+- ✅ Strengths of the prompt
+- ⚠️ Areas for improvement
+- 🎯 Specificity analysis
+- 📋 Context evaluation
+- 💡 Actionable recommendations
+
+---
+
+### `/summary` - Summarize Conversation
+
+Analyzes your conversation history to provide a clear, actionable summary of what you've been working on.
+
+**Usage:**
+```
+@prompt-improver /summary
+@prompt-improver /summary Focus on the authentication work
+```
+
+**What it provides:**
+- 📋 **Overview** - Brief summary of the conversation (2-3 sentences)
+- 🎯 **Current State** - What's been accomplished and what's pending
+- 🔑 **Key Decisions** - Important technical choices and constraints discussed
+- 🔍 **Recent Focus** - What the most recent exchanges have been about
+- ➡️ **Next Steps** - Suggested logical next actions
+
+**Perfect for:**
+- Getting back on track after a long conversation
+- Understanding the current state of your work
+- Planning next steps
+- Identifying blockers or issues
+
+**Integration with `/improve`:**
+When you use `/improve` with "Include Conversation History" enabled, the improved prompt automatically includes a summary of what you've been working on. This ensures the improved prompt is contextually aware of your recent progress.
+
+---
+
+### `/handoff` or `/new-chat` - Create Agent Handoff Prompt
+
+Creates a context-preserving prompt for starting a new chat session.
+
+**Usage:**
+```
+@prompt-improver /handoff
+@prompt-improver /new-chat
+@prompt-improver /handoff Focus on the authentication implementation
+```
+
+**What it includes:**
+- 📜 Conversation history (last 10 exchanges)
+- 💻 Workspace context (languages, technologies, open files)
+- 🔀 Git context (branch, status, commits, staged changes)
+- 🎯 Current state and next steps
+- 📝 Technical decisions and requirements
+
+**Perfect for:**
+- Long conversations that need to be split
+- Handing off work to a fresh agent
+- Starting a new chat without losing context
+- Avoiding token limits in long sessions
+
+---
+
+## 💡 Examples
+
+### Example 1: Basic Improvement
+
+**Before:**
 ```
 @workspace create a login page
 ```
 
-### After using @prompt-improver
+**After using @prompt-improver:**
 ```
 @workspace Create a React login page component with the following requirements:
+
+**Core Functionality:**
 - Email and password input fields with validation
 - Form submission handling with error states
-- Integration with our existing authentication context
-- Responsive design using our Tailwind CSS setup
-- Accessibility features (ARIA labels, keyboard navigation)
+- Integration with our existing authentication context (AuthContext.tsx)
 - Display loading state during authentication
+
+**UI/UX:**
+- Responsive design using our Tailwind CSS setup
+- Accessibility features (ARIA labels, keyboard navigation, screen reader support)
+- Error message display for failed login attempts
+- "Remember me" checkbox with localStorage persistence
+
+**Technical Requirements:**
+- TypeScript with proper type definitions
+- React hooks (useState, useContext, useEffect)
+- Form validation using react-hook-form
+- Password visibility toggle
+- Rate limiting on client side (prevent spam submissions)
+
+**Testing:**
+- Unit tests for validation logic
+- Integration tests for authentication flow
 ```
 
-## Requirements
+---
 
-- VS Code version 1.105.0 or higher
-- GitHub Copilot extension installed and authenticated
-- Active GitHub Copilot subscription
+### Example 2: Concise vs Balanced vs Detailed
 
-## Installation
+**Original prompt:** `add error handling`
 
-### From VSIX (Development)
+**Concise output:**
+```
+Add try-catch error handling to the login() function in auth.ts.
+Catch network errors and invalid credentials.
+Return error messages to the UI.
+```
 
-1. Clone this repository
-2. Run npm install
-3. Run npm run package
-4. In VS Code, go to Extensions view
-5. Click "..." menu → "Install from VSIX"
-6. Select the generated .vsix file
+**Balanced output:**
+```
+Add comprehensive error handling to the login() function in src/auth/auth.ts.
 
-### From Marketplace (Coming Soon)
+Requirements:
+- Wrap the authentication API call in try-catch
+- Handle specific error types:
+  * Network errors (timeout, connection failed)
+  * Invalid credentials (401 response)
+  * Server errors (500+ responses)
+- Return user-friendly error messages to the LoginForm component
+- Log errors to the console for debugging
 
-Search for "Prompt Improver" in the VS Code Extensions marketplace.
+Use the existing ErrorMessage component from src/components/ErrorMessage.tsx.
+Follow the error handling pattern used in src/auth/register.ts.
+```
 
-## Development
+**Detailed output:** *(See [PRESET_COMPARISON.md](PRESET_COMPARISON.md) for full example)*
+
+---
+
+## ⚙️ Requirements
+
+- **VS Code:** Version 1.105.0 or higher
+- **GitHub Copilot:** Extension installed and authenticated
+- **Subscription:** Active GitHub Copilot subscription
+
+## ⚙️ Configuration
+
+### Preset Selection
+
+Choose your default improvement style:
+
+**Via Settings UI:**
+1. Open Settings (Ctrl+, or Cmd+,)
+2. Search for "Prompt Improver"
+3. Select from **System Prompt Preset** dropdown
+
+**Via settings.json:**
+```json
+{
+  "promptImprover.systemPromptPreset": "balanced"
+}
+```
+
+**Options:** `"concise"`, `"balanced"` (default), `"detailed"`
+
+---
+
+### Model Selection
+
+**Default Behavior (Recommended):**
+The extension automatically uses whatever model you have selected in Copilot Chat. If no model is selected, it falls back to **gpt-4o-mini** (the fastest model, free with your Copilot subscription). No configuration needed! 🎉
+
+**To override with a specific model:**
+1. Command Palette (Ctrl+Shift+P)
+2. Run: `Prompt Improver: Select Model from Available Options`
+3. Choose from available models
+
+**Manual Entry:**
+```json
+{
+  // Leave empty to use current chat model (recommended)
+  // Falls back to gpt-4o-mini if no model selected
+  "promptImprover.modelFamily": ""
+  
+  // Or specify a model to always use it
+  "promptImprover.modelFamily": "claude-sonnet-4"
+}
+```
+
+**Common options:** `gpt-4o`, `gpt-4o-mini`, `claude-sonnet-4`, `gemini-2.5-pro`, `o3-mini`
+
+**Benefits:**
+- ✅ No configuration needed for most users
+- ✅ Uses gpt-4o-mini by default (fast and free)
+- ✅ Easy to experiment with different models (just switch in chat UI)
+- ✅ Advanced users can still specify a model to always use
+
+---
+
+### Context Control
+
+Enable/disable specific context types:
+
+```json
+{
+  "promptImprover.includeWorkspaceMetadata": true,
+  "promptImprover.includeConversationHistory": true,
+  "promptImprover.includeMarkdownFiles": true,
+  "promptImprover.includeOpenFileContents": true,
+  "promptImprover.includeGitContext": true,
+  "promptImprover.useWorkspaceTools": false
+}
+```
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `includeWorkspaceMetadata` | Languages, technologies, open files | `true` |
+| `includeConversationHistory` | Previous chat messages | `true` |
+| `includeMarkdownFiles` | Project documentation | `true` |
+| `includeOpenFileContents` | Intelligent code synopsis | `true` |
+| `includeGitContext` | Branch, status, commits | `true` |
+| `useWorkspaceTools` | VS Code's built-in tools (experimental) | `false` |
+| `filterWorkspaceTools` | Filter tools to avoid VS Code bugs | `true` |
+
+**Note:** If you enable `useWorkspaceTools`, keep `filterWorkspaceTools` enabled to avoid a known VS Code bug. See [WORKSPACE_TOOLS_FIX.md](WORKSPACE_TOOLS_FIX.md) for details.
+
+---
+
+### Custom System Prompt
+
+Override the preset with your own instructions:
+
+```json
+{
+  "promptImprover.systemPrompt": "Your custom prompt template here..."
+}
+```
+
+**Available placeholders:**
+- `{userPrompt}` - The original prompt
+- `{languages}` - Detected programming languages
+- `{technologies}` - Detected frameworks/technologies
+- `{openFiles}` - Currently open files
+
+---
+
+## 🛠️ Development
 
 ### Setup
 
@@ -116,14 +380,17 @@ npm run compile
 
 # Watch for changes
 npm run watch
+
+# Package for distribution
+npm run package
 ```
 
 ### Running the Extension
 
 1. Open this folder in VS Code
-2. Press F5 to launch Extension Development Host
-3. In the new window, open the Chat view
-4. Try @prompt-improver commands
+2. Press **F5** to launch Extension Development Host
+3. In the new window, open the Chat view (Ctrl+Alt+I)
+4. Try `@prompt-improver` commands
 
 ### Testing
 
@@ -131,120 +398,99 @@ npm run watch
 npm test
 ```
 
-## How It Works
+---
 
-1. **Context Gathering**: The extension automatically detects:
-   - Programming languages in use
-   - Frameworks and technologies (from config files like package.json, tsconfig.json, etc.)
-   - Currently open files
+## 🔍 How It Works
 
-2. **AI Analysis**: Uses the GitHub Copilot Language Model API to:
-   - Analyze the original prompt for clarity and specificity
-   - Incorporate workspace context
-   - Generate improved, more effective prompts
+1. **Context Gathering**
+   - Detects programming languages and frameworks
+   - Analyzes open files with intelligent code synopsis
+   - Extracts Git context (branch, status, commits)
+   - Scans relevant project documentation
+   - Captures conversation history
 
-3. **Smart Suggestions**: Provides educational feedback about:
-   - What makes prompts effective
-   - How to structure requests for AI assistants
-   - Best practices for technical prompts
+2. **AI Analysis**
+   - Uses GitHub Copilot Language Model API
+   - Analyzes prompt for clarity and specificity
+   - Incorporates gathered context
+   - Generates improved, actionable prompts
 
-## Commands
+3. **Error Handling**
+   - Graceful degradation on failures
+   - User-friendly error messages
+   - Cancellation support
+   - Stream closure protection
 
-| Command | Description |
-|---------|-------------|
-| /improve | Improve a prompt (default command) |
-| /analyze | Analyze what makes a prompt effective |
-
-## Configuration
-
-### System Prompt Preset
-
-Choose the improvement style that best fits your workflow:
-
-```json
-{
-  "promptImprover.systemPromptPreset": "context-aware"
-}
-```
-
-**Options:**
-- `"general"` - Balanced approach without workspace context
-- `"context-aware"` (default) - Incorporates workspace languages, frameworks, and open files
-- `"concise"` - Minimal overhead for quick improvements
-- `"custom"` - Use your own system prompt
-
-### Model Selection
-
-Choose which AI model to use for prompt improvement.
-
-**Quick Selection (Recommended):**
-1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
-2. Run: `Prompt Improver: Select Model from Available Options`
-3. Choose from the live list of available models
-
-**Manual Entry:**
-```json
-{
-  "promptImprover.modelFamily": "gpt-4o"
-}
-```
-
-Common options: `gpt-4o`, `gpt-4o-mini`, `claude-3.5-sonnet`, `gemini-2.5-pro`, `o3`
-
-### Custom System Prompt
-
-Create your own improvement instructions (when preset is set to `"custom"`):
-
-```json
-{
-  "promptImprover.customSystemPrompt": "Your custom prompt here..."
-}
-```
-
-**Available placeholders:**
-- `{userPrompt}` - The original prompt
-- `{languages}` - Detected programming languages
-- `{technologies}` - Detected frameworks/technologies
-- `{openFiles}` - Currently open files
-
-[View detailed preset documentation →](PRESETS.md)
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| **Prompt Improver: Select Model from Available Options** | Interactive picker to choose your AI model |
-| **Prompt Improver: List Available Copilot Models** | View all available models in a panel |
-
-## Tips for Better Prompts
-
-✅ **Be Specific**: Instead of "create a function", say "create a TypeScript function that validates email addresses using regex"
-
-✅ **Provide Context**: Mention your tech stack, frameworks, or coding patterns you want to follow
-
-✅ **Define Constraints**: Specify requirements like error handling, testing, or performance considerations
-
-✅ **State Expected Output**: Clarify if you want code, explanation, tests, or documentation
-
-## Privacy & Security
-
-- This extension only accesses files and context that are already open in your workspace
-- All prompt improvement happens through the GitHub Copilot Language Model API
-- No data is sent to third-party services
-- Follows GitHub Copilot's privacy and security policies
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-MIT
-
-## Feedback
-
-Found a bug or have a feature request? Please open an issue on GitHub.
+📖 **[Read the error handling guide →](ERROR_HANDLING.md)**
 
 ---
 
-**Enjoy better prompts and better AI responses!** ���
+## 💡 Tips for Better Prompts
+
+| Tip | Example |
+|-----|---------|
+| ✅ **Be Specific** | Instead of "create a function", say "create a TypeScript function that validates email addresses using regex" |
+| ✅ **Provide Context** | Mention your tech stack, frameworks, or coding patterns you want to follow |
+| ✅ **Define Constraints** | Specify requirements like error handling, testing, or performance considerations |
+| ✅ **State Expected Output** | Clarify if you want code, explanation, tests, or documentation |
+| ✅ **Use References** | Include `#file:path/to/file.ts` or `@workspace` for specific context |
+
+---
+
+## 🔒 Privacy & Security
+
+- ✅ Only accesses files and context already open in your workspace
+- ✅ All processing happens through GitHub Copilot Language Model API
+- ✅ No data sent to third-party services
+- ✅ Follows GitHub Copilot's privacy and security policies
+- ✅ Context gathering respects your settings and permissions
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Here's how you can help:
+
+1. **Report Bugs** - Open an issue with details and reproduction steps
+2. **Suggest Features** - Share your ideas for improvements
+3. **Submit PRs** - Fix bugs or add features (please discuss first for major changes)
+4. **Improve Docs** - Help make documentation clearer and more comprehensive
+
+**Development Setup:**
+```bash
+git clone https://github.com/yourusername/vscode-chat-improve-prompt.git
+cd vscode-chat-improve-prompt
+npm install
+code .
+# Press F5 to start debugging
+```
+
+---
+
+## 📜 License
+
+MIT License - see [LICENSE](LICENSE) file for details
+
+---
+
+## 🐛 Feedback & Support
+
+- **Bug Reports:** [Open an issue](https://github.com/yourusername/vscode-chat-improve-prompt/issues)
+- **Feature Requests:** [Start a discussion](https://github.com/yourusername/vscode-chat-improve-prompt/discussions)
+- **Questions:** Check the [documentation](#-documentation) or open a discussion
+
+---
+
+## 🎉 Acknowledgments
+
+Built with:
+
+- [VS Code Extension API](https://code.visualstudio.com/api)
+- [GitHub Copilot Language Model API](https://code.visualstudio.com/api/extension-guides/ai/language-model)
+- [TypeScript](https://www.typescriptlang.org/)
+
+---
+
+**Enjoy better prompts and better AI responses!**
+
+*Made with love for the VS Code community*

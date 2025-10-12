@@ -2,7 +2,7 @@
   "name": "prompt-improver",
   "displayName": "Prompt Improver",
   "description": "Improve your Copilot Chat prompts using AI and workspace context",
-  "version": "0.0.6",
+  "version": "0.0.8",
   "publisher": "TheRealGorgan",
   "author": {
     "name": "The Real Gorgan",
@@ -71,6 +71,14 @@
           {
             "name": "analyze",
             "description": "Analyze what makes a prompt effective"
+          },
+          {
+            "name": "summary",
+            "description": "Summarize the current conversation and recent work"
+          },
+          {
+            "name": "handoff",
+            "description": "Create a context-preserving prompt for starting a new chat"
           }
         ],
         "disambiguation": [
@@ -124,14 +132,14 @@
         },
         "promptImprover.modelFamily": {
           "type": "string",
-          "default": "gpt-4o",
+          "default": "",
           "editPresentation": "singlelineText",
-          "markdownDescription": "Specify which model to use for prompt improvement (e.g., `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`). Leave empty to use the default model.\n\n**Commands:**  \n[Select Model](command:prompt-improver.selectModel) | [List Available Models](command:prompt-improver.listAvailableModels)",
+          "markdownDescription": "**Model Selection:** Specify which model to use for prompt improvement, or leave empty to use the current chat model.\n\n**Leave empty** (recommended): Uses whatever model you have selected in Copilot Chat (falls back to gpt-4o-mini if no model is selected)  \n**Specify a model**: Always use a specific model (e.g., `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`)\n\n**Default fallback**: gpt-4o-mini (fastest, free with Copilot subscription)\n\n**Commands:**  \n[Select Model](command:prompt-improver.selectModel) | [List Available Models](command:prompt-improver.listAvailableModels)",
           "order": 3
         },
         "promptImprover.contextRichness": {
           "type": "string",
-          "default": "auto",
+          "default": "rich",
           "enum": [
             "minimal",
             "auto",

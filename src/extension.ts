@@ -15,60 +15,46 @@ const PARTICIPANT_ID = 'prompt-improver.prompt-improver';
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Prompt Improver extension is now active!');
 
-	// Initialize the systemPrompt setting with the current preset value
-	console.log('[Prompt Improver] Initializing systemPrompt display on activation...');
-	updateSystemPromptDisplay().catch(err => {
-		console.error('[Prompt Improver] Error during initialization:', err);
-	});
+	// Debug: Check for setting conflicts
+	const config = vscode.workspace.getConfiguration('promptImprover');
+	const globalPreset = config.inspect<string>('systemPromptPreset')?.globalValue;
+	const workspacePreset = config.inspect<string>('systemPromptPreset')?.workspaceValue;
+	const workspaceFolderPreset = config.inspect<string>('systemPromptPreset')?.workspaceFolderValue;
+	const effectivePreset = config.get<string>('systemPromptPreset');
 
-	// Watch for configuration changes to update the systemPrompt field display
-	const configWatcher = vscode.workspace.onDidChangeConfiguration(async e => {
-		console.log('[Prompt Improver] Configuration changed, checking if it affects our settings...');
+	console.log('[Prompt Improver] Extension activated!');
+	console.log('[Prompt Improver] Preset settings:');
+	console.log(`  - Global: ${globalPreset}`);
+	console.log(`  - Workspace: ${workspacePreset}`);
+	console.log(`  - Workspace Folder: ${workspaceFolderPreset}`);
+	console.log(`  - Effective: ${effectivePreset}`);
 
+	// Listen for preset changes and update the systemPrompt field to show the preset content
+	const configChangeListener = vscode.workspace.onDidChangeConfiguration(e => {
 		if (e.affectsConfiguration('promptImprover.systemPromptPreset')) {
-			console.log('[Prompt Improver] systemPromptPreset changed! Checking for confirmation...');
-
 			const config = vscode.workspace.getConfiguration('promptImprover');
-			const currentSystemPrompt = config.get<string>('systemPrompt', '');
+			const preset = config.get<string>('systemPromptPreset', 'detailed');
+			const presetContent = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['detailed'];
 
-			// Check if user has manually edited the systemPrompt field
-			const presetPrompts = Object.values(SYSTEM_PROMPT_PRESETS);
-			const isManuallyEdited = currentSystemPrompt && !presetPrompts.includes(currentSystemPrompt);
-
-			if (isManuallyEdited) {
-				// Ask for confirmation before overwriting
-				const choice = await vscode.window.showWarningMessage(
-					`Changing the preset will overwrite your current System Prompt. Any manual edits will be lost.`,
-					{ modal: true },
-					'Continue',
-					'Cancel'
-				);
-
-				if (choice === 'Continue') {
-					console.log('[Prompt Improver] User confirmed, updating display...');
-					await updateSystemPromptDisplay();
-				} else {
-					console.log('[Prompt Improver] User cancelled preset change');
-					// Note: We can't revert the preset change here as it's already been saved
-					// The user will need to manually change it back if desired
-				}
-			} else {
-				// No manual edits, just update
-				console.log('[Prompt Improver] No manual edits detected, updating display...');
-				await updateSystemPromptDisplay();
-			}
-		} else if (e.affectsConfiguration('promptImprover.customSystemPrompt')) {
-			console.log('[Prompt Improver] customSystemPrompt changed!');
-			const config = vscode.workspace.getConfiguration('promptImprover');
-			const preset = config.get<string>('systemPromptPreset', 'context-aware');
-			if (preset === 'custom') {
-				console.log('[Prompt Improver] In custom mode, updating display...');
-				await updateSystemPromptDisplay();
-			}
-		} else if (e.affectsConfiguration('promptImprover')) {
-			console.log('[Prompt Improver] Some promptImprover config changed, but not preset or custom');
+			// Update the systemPrompt field to show the current preset content
+			// This allows users to see what the preset contains in the Settings UI
+			config.update('systemPrompt', presetContent, vscode.ConfigurationTarget.Global);
+			console.log(`[Prompt Improver] Preset changed to: ${preset}`);
 		}
 	});
+	context.subscriptions.push(configChangeListener);
+
+	// Initialize systemPrompt with current preset content if it's empty or contains old preset
+	const currentSystemPrompt = config.get<string>('systemPrompt', '');
+	const currentPreset = config.get<string>('systemPromptPreset', 'detailed');
+	const currentPresetContent = SYSTEM_PROMPT_PRESETS[currentPreset] || SYSTEM_PROMPT_PRESETS['detailed'];
+
+	// If systemPrompt is empty or doesn't match any current preset, set it to the current preset
+	const allCurrentPresets = Object.values(SYSTEM_PROMPT_PRESETS);
+	if (!currentSystemPrompt || !allCurrentPresets.includes(currentSystemPrompt)) {
+		config.update('systemPrompt', currentPresetContent, vscode.ConfigurationTarget.Global);
+		console.log(`[Prompt Improver] Initialized systemPrompt with ${currentPreset} preset`);
+	}
 
 	// Register the copy command
 	const stripImprovedPrompt = (text: string) => {
@@ -103,6 +89,37 @@ export function activate(context: vscode.ExtensionContext) {
 						prompt: 'Analyze what makes this improved prompt effective',
 						label: vscode.l10n.t('Analyze the improvements'),
 						command: 'analyze'
+					},
+					{
+						prompt: 'Summarize the conversation',
+						label: vscode.l10n.t('Summarize conversation'),
+						command: 'summary'
+					},
+					{
+						prompt: 'Create handoff prompt for new chat',
+						label: vscode.l10n.t('Create handoff prompt'),
+						command: 'handoff'
+					}
+				];
+			} else if (result.metadata.command === 'summary') {
+				return [
+					{
+						prompt: 'Improve my next prompt based on this summary',
+						label: vscode.l10n.t('Improve a prompt'),
+						command: 'improve'
+					},
+					{
+						prompt: 'Create handoff prompt with this context',
+						label: vscode.l10n.t('Create handoff prompt'),
+						command: 'handoff'
+					}
+				];
+			} else if (result.metadata.command === 'handoff' || result.metadata.command === 'new-chat') {
+				return [
+					{
+						prompt: 'Improve the handoff prompt',
+						label: vscode.l10n.t('Improve handoff prompt'),
+						command: 'improve'
 					}
 				];
 			}
@@ -278,15 +295,37 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	context.subscriptions.push(participant, copyCommand, configWatcher, selectModelCommand, listModelsCommand);
+	context.subscriptions.push(participant, copyCommand, selectModelCommand, listModelsCommand);
 }
 
 /**
  * Get the configured language model based on user settings
+ * If no specific model is configured, uses the current chat model or falls back to gpt-4o-mini
  */
-async function getConfiguredModel(): Promise<vscode.LanguageModelChat | undefined> {
+async function getConfiguredModel(currentChatModel?: vscode.LanguageModelChat): Promise<vscode.LanguageModelChat | undefined> {
 	const config = vscode.workspace.getConfiguration('promptImprover');
-	const family = config.get<string>('modelFamily', 'gpt-4o');
+	const family = config.get<string>('modelFamily', '');
+
+	// If no specific model family is configured, use the current chat model
+	if (!family || family.trim() === '') {
+		if (currentChatModel) {
+			console.log(`[Prompt Improver] Using current chat model: ${currentChatModel.family} (${currentChatModel.name})`);
+			return currentChatModel;
+		}
+		// Fallback to gpt-4o-mini (fastest, free with Copilot subscription)
+		console.log('[Prompt Improver] No model configured and no current chat model, using gpt-4o-mini as default');
+		const selector: { vendor: string; family: string } = {
+			vendor: 'copilot',
+			family: 'gpt-4o-mini'
+		};
+		const models = await vscode.lm.selectChatModels(selector);
+		if (models.length > 0) {
+			return models[0];
+		}
+		// If gpt-4o-mini is not available, try any copilot model
+		const anyModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+		return anyModels.length > 0 ? anyModels[0] : undefined;
+	}
 
 	// Build selector options - always use copilot vendor
 	const selector: { vendor: string; family?: string } = {
@@ -296,6 +335,7 @@ async function getConfiguredModel(): Promise<vscode.LanguageModelChat | undefine
 	// Add family if specified
 	if (family && family.trim() !== '') {
 		selector.family = family;
+		console.log(`[Prompt Improver] Using configured model family: ${family}`);
 	}
 
 	// Select models
@@ -324,14 +364,16 @@ async function handleChatRequest(
 		// Determine which command to execute
 		if (request.command === 'analyze') {
 			await handleAnalyzeCommand(request, context, stream, token);
-		} else if (request.command === 'improve-general') {
-			await handleImproveCommand(request, context, stream, token, 'general');
-		} else if (request.command === 'improve-context') {
-			await handleImproveCommand(request, context, stream, token, 'context-aware');
+		} else if (request.command === 'summary') {
+			await handleSummaryCommand(request, context, stream, token);
+		} else if (request.command === 'handoff' || request.command === 'new-chat') {
+			await handleHandoffCommand(request, context, stream, token);
 		} else if (request.command === 'improve-concise') {
 			await handleImproveCommand(request, context, stream, token, 'concise');
-		} else if (request.command === 'improve-custom') {
-			await handleImproveCommand(request, context, stream, token, 'custom');
+		} else if (request.command === 'improve-balanced') {
+			await handleImproveCommand(request, context, stream, token, 'balanced');
+		} else if (request.command === 'improve-detailed') {
+			await handleImproveCommand(request, context, stream, token, 'detailed');
 		} else {
 			// Default to improve command (uses configured preset)
 			await handleImproveCommand(request, context, stream, token);
@@ -366,108 +408,251 @@ async function handleImproveCommand(
 	const userPrompt = request.prompt;
 
 	if (!userPrompt || userPrompt.trim().length === 0) {
-		stream.markdown('Please provide a prompt that you want me to improve.\n\n');
-		stream.markdown('**Example usage:**\n');
-		stream.markdown('```\n@prompt-improver /improve write a function\n```\n');
-		stream.markdown('```\n@prompt-improver #file:app.ts improve this code\n```\n');
+		safeStreamWrite(stream, 'Please provide a prompt that you want me to improve.\n\n');
+		safeStreamWrite(stream, '**Example usage:**\n');
+		safeStreamWrite(stream, '```\n@prompt-improver /improve write a function\n```\n');
+		safeStreamWrite(stream, '```\n@prompt-improver #file:app.ts improve this code\n```\n');
+		return;
+	}
+
+	// Check for cancellation early
+	if (isCancelled(token)) {
+		console.log('[Prompt Improver] Operation cancelled by user');
 		return;
 	}
 
 	// Show which preset is being used if overridden
 	if (overridePreset) {
 		const presetNames: Record<string, string> = {
-			'general': 'General',
-			'context-aware': 'Context-aware',
 			'concise': 'Concise',
-			'custom': 'Custom'
+			'balanced': 'Balanced',
+			'detailed': 'Detailed'
 		};
 		const presetName = presetNames[overridePreset] || overridePreset;
-		stream.markdown(`*Using ${presetName} preset for this prompt*\n\n`);
+		if (!safeStreamWrite(stream, `*Using ${presetName} preset for this prompt*\n\n`)) {
+			return; // Stream closed
+		}
 	}
 
 	// Extract any references (like #file, @workspace, etc.)
 	const references = request.references || [];
 
-	// Determine context richness based on settings and preset
+	// Get context inclusion settings
 	const config = vscode.workspace.getConfiguration('promptImprover');
-	const contextRichness = config.get<string>('contextRichness', 'auto');
-	const shouldGatherRichContext = determineContextRichness(contextRichness, overridePreset);
+	const includeWorkspaceMetadata = config.get<boolean>('includeWorkspaceMetadata', true);
+	const includeConversationHistory = config.get<boolean>('includeConversationHistory', true);
+	const includeMarkdownFiles = config.get<boolean>('includeMarkdownFiles', true);
+	const includeOpenFileContents = config.get<boolean>('includeOpenFileContents', true);
+	const includeGitContext = config.get<boolean>('includeGitContext', true);
+	const useWorkspaceTools = config.get<boolean>('useWorkspaceTools', false);
+	const filterWorkspaceTools = config.get<boolean>('filterWorkspaceTools', true);
 
-	// Gather workspace context (always needed for basic info)
-	stream.progress('Gathering workspace context...');
-	const workspaceContext = await gatherWorkspaceContext();
+	try {
+		// Gather workspace context if enabled
+		let workspaceContext: WorkspaceContext | undefined;
+		if (includeWorkspaceMetadata && !isCancelled(token)) {
+			safeStreamWrite(stream, '', 'progress');
+			safeStreamWrite(stream, 'Gathering workspace context...', 'progress');
+			workspaceContext = await gatherWorkspaceContext();
+		}
 
-	// Conditionally gather rich context based on settings
-	let conversationHistory: ConversationHistory | undefined;
-	let markdownContext: MarkdownContext | undefined;
+		// Check for cancellation after each async operation
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Operation cancelled during context gathering');
+			return;
+		}
 
-	if (shouldGatherRichContext) {
-		// Extract conversation history
-		conversationHistory = extractConversationHistory(context);
+		// Gather conversation history if enabled
+		let conversationHistory: ConversationHistory | undefined;
+		if (includeConversationHistory) {
+			conversationHistory = extractConversationHistory(context);
+		}
 
-		// Scan for relevant markdown context files
-		stream.progress('Scanning for relevant context files...');
-		markdownContext = await scanRelevantMarkdownFiles(userPrompt);
+		// Scan for relevant markdown context files if enabled
+		let markdownContext: MarkdownContext | undefined;
+		if (includeMarkdownFiles && !isCancelled(token)) {
+			safeStreamWrite(stream, 'Scanning for relevant context files...', 'progress');
+			markdownContext = await scanRelevantMarkdownFiles(userPrompt);
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Operation cancelled during markdown scanning');
+			return;
+		}
+
+		// Gather open file contents if enabled
+		let openFileContents: OpenFileContents | undefined;
+		if (includeOpenFileContents && !isCancelled(token)) {
+			safeStreamWrite(stream, 'Analyzing open files...', 'progress');
+			openFileContents = await gatherOpenFileContents();
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Operation cancelled during file analysis');
+			return;
+		}
+
+		// Gather Git context if enabled
+		let gitContext: GitContext | undefined;
+		if (includeGitContext && !isCancelled(token)) {
+			safeStreamWrite(stream, 'Gathering Git context...', 'progress');
+			try {
+				gitContext = await gatherGitContext();
+			} catch (gitError) {
+				// Git errors shouldn't stop the whole process
+				console.warn('[Prompt Improver] Could not gather Git context:', gitError);
+				// Continue without Git context
+			}
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Operation cancelled during Git context gathering');
+			return;
+		}
+
+		// Build the prompt for the LLM
+		const systemPrompt = buildImprovePrompt(userPrompt, workspaceContext, overridePreset, references, conversationHistory, markdownContext, openFileContents, gitContext);
+
+		// Get the configured language model (or use current chat model)
+		const model = await getConfiguredModel(request.model);
+
+		if (!model) {
+			safeStreamWrite(stream, '⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated, or check your model settings.\n\n');
+			return;
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Operation cancelled before model request');
+			return;
+		}
+
+		// Get available tools if workspace tools are enabled
+		const requestOptions: vscode.LanguageModelChatRequestOptions = {};
+		if (useWorkspaceTools) {
+			try {
+				safeStreamWrite(stream, 'Loading workspace tools...', 'progress');
+				// Get all available tools - this includes built-in workspace context tools
+				const allTools = vscode.lm.tools;
+				console.log(`[Prompt Improver] Found ${allTools.length} available tools`);
+
+				// Log first few tool details to help debug filtering
+				if (allTools.length > 0) {
+					const sampleTools = allTools.slice(0, 3).map(t => ({
+						name: (t as any).name || 'unknown',
+						tags: (t as any).tags || []
+					}));
+					console.log(`[Prompt Improver] Sample tools:`, JSON.stringify(sampleTools));
+				}
+
+				let toolsToUse = allTools;
+
+				// Filter to only the most useful tools if enabled (to avoid VS Code's "No lowest priority node" bug)
+				// This bug occurs when too many tools (95+) are passed to the LLM
+				if (filterWorkspaceTools) {
+					// Strategy 1: Filter by tags (preferred method per VS Code API docs)
+					// Look for tools tagged with 'workspace' or 'copilot' which are the core tools
+					const priorityTags = ['workspace', 'copilot', 'vscode'];
+
+					const tagFilteredTools = allTools.filter(tool => {
+						const toolTags = (tool as any).tags || [];
+						return toolTags.some((tag: string) =>
+							priorityTags.some(priority => tag.toLowerCase().includes(priority))
+						);
+					});
+
+					if (tagFilteredTools.length > 0 && tagFilteredTools.length < allTools.length) {
+						toolsToUse = tagFilteredTools;
+						console.log(`[Prompt Improver] Filtered by tags to ${toolsToUse.length} tools (from ${allTools.length} total)`);
+					} else {
+						// Strategy 2: Fallback to limiting by count
+						// Just take the first 20 tools to avoid the bug
+						toolsToUse = allTools.slice(0, 20);
+						console.log(`[Prompt Improver] Tag filter didn't help, limiting to first ${toolsToUse.length} tools (from ${allTools.length} total)`);
+					}
+				} else {
+					console.log(`[Prompt Improver] Tool filtering disabled, using all ${allTools.length} tools`);
+				}
+
+				// Only pass tools if there are any available
+				if (toolsToUse.length > 0) {
+					// Cast to mutable array since the API expects it
+					requestOptions.tools = [...toolsToUse];
+					console.log(`[Prompt Improver] Passing ${toolsToUse.length} tools to LLM`);
+				} else {
+					console.log(`[Prompt Improver] No tools available, proceeding without tools`);
+				}
+			} catch (error: any) {
+				console.error(`[Prompt Improver] Error loading tools:`, error);
+
+				// Check for specific VS Code tool system errors
+				const errorMessage = error?.message || String(error);
+				if (errorMessage.includes('No lowest priority node found') || errorMessage.includes('priority node')) {
+					safeStreamWrite(stream, `\n\n*Note: VS Code's workspace tools encountered an internal error. This is a known VS Code bug that occurs with too many tools. Try enabling "Filter Workspace Tools" in settings, or update to VS Code Insiders for the fix.*\n\n`);
+					console.warn('[Prompt Improver] VS Code tool priority system error - this is a VS Code bug, not an extension issue');
+				} else {
+					safeStreamWrite(stream, `\n\n*Note: Could not load workspace tools. Proceeding without tool support.*\n\n`);
+				}
+			}
+		}
+
+		// Create messages for the LLM
+		const messages = [
+			vscode.LanguageModelChatMessage.User(systemPrompt)
+		];
+
+		safeStreamWrite(stream, 'Improving your prompt...', 'progress');
+
+		// Send request to language model with tools
+		const chatResponse = await model.sendRequest(messages, requestOptions, token);
+
+		// Collect the improved prompt text
+		let improvedPrompt = '';
+
+		// Stream the response - the LLM will automatically invoke tools as needed
+		if (!safeStreamWrite(stream, '## Improved Prompt\n\n')) {
+			return; // Stream closed
+		}
+
+		for await (const fragment of chatResponse.text) {
+			// Check for cancellation during streaming
+			if (isCancelled(token)) {
+				console.log('[Prompt Improver] Operation cancelled during streaming');
+				safeStreamWrite(stream, '\n\n*[Operation cancelled]*\n\n');
+				return;
+			}
+
+			improvedPrompt += fragment;
+			if (!safeStreamWrite(stream, fragment)) {
+				// Stream closed, stop streaming
+				console.log('[Prompt Improver] Stream closed during response streaming');
+				return;
+			}
+		}
+
+		if (!safeStreamWrite(stream, '\n\n---\n\n')) {
+			return; // Stream closed
+		}
+
+		// Add a copy button - strip any remaining quotes or wrapper text
+		const cleanPrompt = improvedPrompt.trim().replace(/^["']|["']$/g, '');
+
+		try {
+			stream.button({
+				command: 'prompt-improver.copyImprovedPrompt',
+				title: vscode.l10n.t('📋 Copy to Clipboard'),
+				arguments: [cleanPrompt]
+			});
+
+			safeStreamWrite(stream, '\n\n💡 **Tip:** Click the button above to copy, or select the text and use Ctrl+C.\n');
+		} catch (buttonError) {
+			// Button creation failed (stream might be closed)
+			console.warn('[Prompt Improver] Could not add copy button:', buttonError);
+		}
+
+	} catch (err) {
+		// Use the centralized error handler
+		handleError(err, stream);
 	}
-
-	// Build the prompt for the LLM
-	const systemPrompt = buildImprovePrompt(userPrompt, workspaceContext, overridePreset, references, conversationHistory, markdownContext);
-
-	// Get the configured language model
-	const model = await getConfiguredModel();
-
-	if (!model) {
-		stream.markdown('⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated, or check your model settings.');
-		return;
-	}
-
-	// Determine the active preset (reuse config from above)
-	const activePreset = overridePreset || config.get<string>('systemPromptPreset', 'context-aware');
-	const useWorkspaceContext = activePreset === 'context-aware';
-
-	// Create messages for the LLM
-	const messages = [
-		vscode.LanguageModelChatMessage.User(systemPrompt)
-	];
-
-	stream.progress('Improving your prompt...');
-
-	// Build request options - for context-aware preset, use workspace context internally
-	const requestOptions: vscode.LanguageModelChatRequestOptions = {};
-
-	if (useWorkspaceContext && vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-		stream.progress('Analyzing workspace for context...');
-
-		// Use workspace context internally during the improvement process
-		// This allows the LLM to access the codebase and make informed suggestions
-		// but the output will NOT include @workspace - it will have explicit details instead
-		requestOptions.justification = 'Analyzing workspace structure, files, and patterns to provide context-aware prompt improvements with specific technical details';
-	}
-
-	// Send request to language model
-	const chatResponse = await model.sendRequest(messages, requestOptions, token);
-
-	// Collect the improved prompt text
-	let improvedPrompt = '';
-	
-	// Stream the response
-	stream.markdown('## Improved Prompt\n\n');
-	for await (const fragment of chatResponse.text) {
-		improvedPrompt += fragment;
-		stream.markdown(fragment);
-	}
-
-	stream.markdown('\n\n---\n\n');
-	
-	// Add a copy button - strip any remaining quotes or wrapper text
-	const cleanPrompt = improvedPrompt.trim().replace(/^["']|["']$/g, '');
-	stream.button({
-		command: 'prompt-improver.copyImprovedPrompt',
-		title: vscode.l10n.t('📋 Copy to Clipboard'),
-		arguments: [cleanPrompt]
-	});
-	
-	stream.markdown('\n\n💡 **Tip:** Click the button above to copy, or select the text and use Ctrl+C.\n');
 }
 
 /**
@@ -479,221 +664,820 @@ async function handleAnalyzeCommand(
 	stream: vscode.ChatResponseStream,
 	token: vscode.CancellationToken
 ): Promise<void> {
-	
+
 	const userPrompt = request.prompt;
 
 	if (!userPrompt || userPrompt.trim().length === 0) {
-		stream.markdown('Please provide a prompt that you want me to analyze.\n\n');
-		stream.markdown('**Example usage:**\n');
-		stream.markdown('```\n@prompt-improver /analyze create a REST API with error handling\n```\n');
+		safeStreamWrite(stream, 'Please provide a prompt that you want me to analyze.\n\n');
+		safeStreamWrite(stream, '**Example usage:**\n');
+		safeStreamWrite(stream, '```\n@prompt-improver /analyze create a REST API with error handling\n```\n');
 		return;
 	}
 
-	// Build the analysis prompt
-	const analysisPrompt = buildAnalysisPrompt(userPrompt);
-
-	// Get the configured language model
-	const model = await getConfiguredModel();
-
-	if (!model) {
-		stream.markdown('⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated, or check your model settings.');
+	// Check for cancellation
+	if (isCancelled(token)) {
+		console.log('[Prompt Improver] Analyze operation cancelled by user');
 		return;
 	}
 
-	const messages = [
-		vscode.LanguageModelChatMessage.User(analysisPrompt)
-	];
+	try {
+		// Build the analysis prompt
+		const analysisPrompt = buildAnalysisPrompt(userPrompt);
 
-	stream.progress('Analyzing prompt effectiveness...');
+		// Get the configured language model (or use current chat model)
+		const model = await getConfiguredModel(request.model);
 
-	// Send request to language model
-	const chatResponse = await model.sendRequest(messages, {}, token);
+		if (!model) {
+			safeStreamWrite(stream, '⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated, or check your model settings.\n\n');
+			return;
+		}
 
-	// Stream the response
-	stream.markdown('## Prompt Analysis\n\n');
-	for await (const fragment of chatResponse.text) {
-		stream.markdown(fragment);
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Analyze operation cancelled before model request');
+			return;
+		}
+
+		const messages = [
+			vscode.LanguageModelChatMessage.User(analysisPrompt)
+		];
+
+		safeStreamWrite(stream, 'Analyzing prompt effectiveness...', 'progress');
+
+		// Send request to language model
+		const chatResponse = await model.sendRequest(messages, {}, token);
+
+		// Stream the response
+		if (!safeStreamWrite(stream, '## Prompt Analysis\n\n')) {
+			return; // Stream closed
+		}
+
+		for await (const fragment of chatResponse.text) {
+			// Check for cancellation during streaming
+			if (isCancelled(token)) {
+				console.log('[Prompt Improver] Analyze operation cancelled during streaming');
+				safeStreamWrite(stream, '\n\n*[Operation cancelled]*\n\n');
+				return;
+			}
+
+			if (!safeStreamWrite(stream, fragment)) {
+				// Stream closed
+				console.log('[Prompt Improver] Stream closed during analyze response streaming');
+				return;
+			}
+		}
+	} catch (err) {
+		handleError(err, stream);
 	}
+}
+
+/**
+ * Handle the /handoff command - creates a context-preserving prompt for starting a new chat
+ */
+async function handleHandoffCommand(
+	request: vscode.ChatRequest,
+	context: vscode.ChatContext,
+	stream: vscode.ChatResponseStream,
+	token: vscode.CancellationToken
+): Promise<void> {
+
+	// Check for cancellation
+	if (isCancelled(token)) {
+		console.log('[Prompt Improver] Handoff operation cancelled by user');
+		return;
+	}
+
+	try {
+		safeStreamWrite(stream, 'Analyzing conversation context...', 'progress');
+
+		// Extract conversation history
+		const conversationHistory = extractConversationHistory(context);
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Handoff operation cancelled during history extraction');
+			return;
+		}
+
+		// Get workspace context
+		safeStreamWrite(stream, 'Gathering workspace context...', 'progress');
+		const workspaceContext = await gatherWorkspaceContext();
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Handoff operation cancelled during workspace context gathering');
+			return;
+		}
+
+		// Get Git context to understand current work
+		safeStreamWrite(stream, 'Gathering Git context...', 'progress');
+		let gitContext: GitContext | undefined;
+		try {
+			gitContext = await gatherGitContext();
+		} catch (gitError) {
+			// Git errors shouldn't stop the handoff process
+			console.warn('[Prompt Improver] Could not gather Git context for handoff:', gitError);
+			// Continue without Git context
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Handoff operation cancelled during Git context gathering');
+			return;
+		}
+
+		// Build the handoff prompt
+		const handoffPrompt = buildHandoffPrompt(conversationHistory, workspaceContext, gitContext, request.prompt);
+
+		// Get the configured language model (or use current chat model)
+		const model = await getConfiguredModel(request.model);
+
+		if (!model) {
+			safeStreamWrite(stream, '⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated, or check your model settings.\n\n');
+			return;
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Handoff operation cancelled before model request');
+			return;
+		}
+
+		const messages = [
+			vscode.LanguageModelChatMessage.User(handoffPrompt)
+		];
+
+		safeStreamWrite(stream, 'Creating handoff prompt...', 'progress');
+
+		// Send request to language model
+		const chatResponse = await model.sendRequest(messages, {}, token);
+
+		// Stream the response
+		if (!safeStreamWrite(stream, '## 🔄 New Chat Handoff Prompt\n\n')) {
+			return; // Stream closed
+		}
+		if (!safeStreamWrite(stream, 'Copy this prompt to start a new chat with full context:\n\n')) {
+			return;
+		}
+		if (!safeStreamWrite(stream, '---\n\n')) {
+			return;
+		}
+
+		let fullResponse = '';
+		for await (const fragment of chatResponse.text) {
+			// Check for cancellation during streaming
+			if (isCancelled(token)) {
+				console.log('[Prompt Improver] Handoff operation cancelled during streaming');
+				safeStreamWrite(stream, '\n\n*[Operation cancelled]*\n\n');
+				return;
+			}
+
+			fullResponse += fragment;
+			if (!safeStreamWrite(stream, fragment)) {
+				// Stream closed
+				console.log('[Prompt Improver] Stream closed during handoff response streaming');
+				return;
+			}
+		}
+
+		if (!safeStreamWrite(stream, '\n\n---\n\n')) {
+			return;
+		}
+
+		// Add a button to copy the handoff prompt
+		try {
+			stream.button({
+				command: 'prompt-improver.copyImprovedPrompt',
+				title: '📋 Copy Handoff Prompt',
+				arguments: [fullResponse]
+			});
+
+			safeStreamWrite(stream, '\n\n💡 **Tip:** This prompt includes all the context from your current conversation, so the next agent can seamlessly continue where you left off.\n');
+		} catch (buttonError) {
+			// Button creation failed (stream might be closed)
+			console.warn('[Prompt Improver] Could not add copy button to handoff:', buttonError);
+		}
+	} catch (err) {
+		handleError(err, stream);
+	}
+}
+
+/**
+ * Handle the /summary command - summarizes the conversation history
+ */
+async function handleSummaryCommand(
+	request: vscode.ChatRequest,
+	context: vscode.ChatContext,
+	stream: vscode.ChatResponseStream,
+	token: vscode.CancellationToken
+): Promise<void> {
+
+	try {
+		safeStreamWrite(stream, 'Analyzing conversation...', 'progress');
+
+		// Extract conversation history
+		const conversationHistory = extractConversationHistory(context);
+
+		if (!conversationHistory || (conversationHistory.requests.length === 0 && conversationHistory.responses.length === 0)) {
+			safeStreamWrite(stream, '⚠️ No conversation history found. Start a conversation first, then use `/summary` to get a summary.\n\n');
+			return;
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Summary operation cancelled during history extraction');
+			return;
+		}
+
+		// Get workspace context
+		safeStreamWrite(stream, 'Gathering workspace context...', 'progress');
+		const workspaceContext = await gatherWorkspaceContext();
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Summary operation cancelled during workspace context gathering');
+			return;
+		}
+
+		// Get Git context
+		let gitContext: GitContext | undefined;
+		const config = vscode.workspace.getConfiguration('promptImprover');
+		const includeGitContext = config.get<boolean>('includeGitContext', true);
+
+		if (includeGitContext) {
+			safeStreamWrite(stream, 'Gathering Git context...', 'progress');
+			gitContext = await gatherGitContext();
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Summary operation cancelled during Git context gathering');
+			return;
+		}
+
+		// Build the summary prompt
+		const summaryPrompt = buildSummaryPrompt(conversationHistory, workspaceContext, gitContext, request.prompt);
+
+		// Get the configured language model (or use current chat model)
+		const model = await getConfiguredModel(request.model);
+
+		if (!model) {
+			safeStreamWrite(stream, '⚠️ No language model available. Please ensure GitHub Copilot is installed and authenticated, or check your model settings.\n\n');
+			return;
+		}
+
+		if (isCancelled(token)) {
+			console.log('[Prompt Improver] Summary operation cancelled before model request');
+			return;
+		}
+
+		const messages = [
+			vscode.LanguageModelChatMessage.User(summaryPrompt)
+		];
+
+		safeStreamWrite(stream, 'Generating conversation summary...', 'progress');
+
+		// Send request to language model
+		const chatResponse = await model.sendRequest(messages, {}, token);
+
+		// Stream the response
+		if (!safeStreamWrite(stream, '## Conversation Summary\n\n')) {
+			return; // Stream closed
+		}
+
+		for await (const fragment of chatResponse.text) {
+			if (isCancelled(token)) {
+				console.log('[Prompt Improver] Summary operation cancelled during streaming');
+				return;
+			}
+			if (!safeStreamWrite(stream, fragment)) {
+				return; // Stream closed
+			}
+		}
+
+	} catch (err) {
+		handleError(err, stream);
+	}
+}
+
+/**
+ * Build the summary prompt that analyzes conversation history
+ */
+function buildSummaryPrompt(
+	conversationHistory: ConversationHistory,
+	workspaceContext: WorkspaceContext | undefined,
+	gitContext: GitContext | undefined,
+	userInstructions?: string
+): string {
+	let prompt = `You are an expert at analyzing and summarizing technical conversations.
+
+Your task is to analyze the conversation history and create a clear, concise summary that captures:
+1. **What the user has been working on** - The main task or problem being addressed
+2. **Current state** - What's been accomplished and what's still pending
+3. **Key decisions and constraints** - Important technical choices, requirements, or limitations discussed
+4. **Recent focus** - What the most recent exchanges have been about
+5. **Next steps** - What appears to be the logical next action or task
+
+**Format your summary as:**
+- Start with a brief overview (2-3 sentences)
+- Use bullet points for key details
+- Highlight any blockers or issues that came up
+- End with suggested next steps
+
+Keep it concise but informative - aim for clarity over completeness.`;
+
+	// Add workspace context
+	if (workspaceContext) {
+		prompt += `\n\n**Workspace Context:**\n`;
+		if (workspaceContext.languages.length > 0) {
+			prompt += `Languages: ${workspaceContext.languages.join(', ')}\n`;
+		}
+		if (workspaceContext.technologies.length > 0) {
+			prompt += `Technologies: ${workspaceContext.technologies.join(', ')}\n`;
+		}
+		if (workspaceContext.openFiles.length > 0) {
+			prompt += `Open files: ${workspaceContext.openFiles.slice(0, 5).join(', ')}${workspaceContext.openFiles.length > 5 ? '...' : ''}\n`;
+		}
+	}
+
+	// Add Git context
+	if (gitContext) {
+		prompt += `\n**Git Context:**\n`;
+		if (gitContext.branch) {
+			prompt += `Branch: ${gitContext.branch}\n`;
+		}
+		if (gitContext.status) {
+			prompt += `Status: ${gitContext.status.split('\n').slice(0, 3).join(', ')}\n`;
+		}
+	}
+
+	// Add conversation history
+	prompt += `\n**Conversation History:**\n`;
+
+	const maxTurns = 20; // Include more history for summary
+	const recentRequests = conversationHistory.requests.slice(-maxTurns);
+	const recentResponses = conversationHistory.responses.slice(-maxTurns);
+
+	for (let i = 0; i < Math.max(recentRequests.length, recentResponses.length); i++) {
+		if (i < recentRequests.length) {
+			const req = recentRequests[i];
+			prompt += `\nUser: ${req.command ? `/${req.command} ` : ''}${req.prompt}`;
+		}
+		if (i < recentResponses.length) {
+			const response = recentResponses[i];
+			// Truncate very long responses but keep more context than improve command
+			const truncated = response.length > 800 ? response.substring(0, 800) + '... [truncated]' : response;
+			prompt += `\nAssistant: ${truncated}`;
+		}
+	}
+
+	// Add user instructions if provided
+	if (userInstructions && userInstructions.trim()) {
+		prompt += `\n\n**Additional Instructions:**\n${userInstructions}`;
+	}
+
+	prompt += `\n\nNow provide a clear, actionable summary of this conversation.`;
+
+	return prompt;
+}
+
+/**
+ * Build the handoff prompt that preserves conversation context
+ */
+function buildHandoffPrompt(
+	conversationHistory: ConversationHistory | undefined,
+	workspaceContext: WorkspaceContext | undefined,
+	gitContext: GitContext | undefined,
+	userInstructions?: string
+): string {
+	let prompt = `You are an expert at creating comprehensive context-preserving prompts for AI agent handoffs.
+
+Your task is to analyze the conversation history and create a single, comprehensive prompt that can be used to start a new chat session while preserving all the important context.
+
+**Goal:** Create a prompt that allows a new AI agent to seamlessly continue the work without losing any important context.
+
+**Requirements:**
+1. Summarize what the user has been working on
+2. Include the current state of the work (what's been done, what's pending)
+3. Preserve any important technical decisions, constraints, or requirements discussed
+4. Include the most recent request or task (this is likely what needs to continue)
+5. Add relevant workspace context (languages, technologies, files being worked on)
+6. Make it clear, actionable, and ready to paste into a new chat
+
+**Format:** Return ONLY the handoff prompt text - no meta-commentary, no explanations, just the prompt itself.
+
+`;
+
+	// Add workspace context
+	if (workspaceContext) {
+		prompt += `\n**Current Workspace:**\n`;
+		prompt += `- Languages: ${workspaceContext.languages.join(', ')}\n`;
+		prompt += `- Technologies: ${workspaceContext.technologies.join(', ')}\n`;
+		if (workspaceContext.openFiles.length > 0) {
+			prompt += `- Open Files: ${workspaceContext.openFiles.slice(0, 10).join(', ')}${workspaceContext.openFiles.length > 10 ? '...' : ''}\n`;
+		}
+	}
+
+	// Add Git context
+	if (gitContext) {
+		if (gitContext.branch) {
+			prompt += `- Current Branch: ${gitContext.branch}\n`;
+		}
+		if (gitContext.status) {
+			prompt += `- Git Status: ${gitContext.status.split('\n').slice(0, 5).join(', ')}\n`;
+		}
+	}
+
+	// Add conversation history
+	if (conversationHistory && (conversationHistory.requests.length > 0 || conversationHistory.responses.length > 0)) {
+		prompt += `\n**Conversation History (last 10 exchanges):**\n`;
+
+		const maxTurns = 10;
+		const recentRequests = conversationHistory.requests.slice(-maxTurns);
+		const recentResponses = conversationHistory.responses.slice(-maxTurns);
+
+		for (let i = 0; i < Math.max(recentRequests.length, recentResponses.length); i++) {
+			if (i < recentRequests.length) {
+				const req = recentRequests[i];
+				prompt += `\nUser: ${req.command ? `/${req.command} ` : ''}${req.prompt}`;
+			}
+			if (i < recentResponses.length) {
+				const response = recentResponses[i];
+				// Truncate very long responses but keep more context than before
+				const truncated = response.length > 500 ? response.substring(0, 500) + '... [truncated]' : response;
+				prompt += `\nAssistant: ${truncated}\n`;
+			}
+		}
+	}
+
+	// Add user instructions if provided
+	if (userInstructions && userInstructions.trim().length > 0) {
+		prompt += `\n**Additional Instructions:**\n${userInstructions}\n`;
+	}
+
+	prompt += `\n**Now create the handoff prompt:**`;
+
+	return prompt;
 }
 
 /**
  * System prompt presets
  */
 const SYSTEM_PROMPT_PRESETS: { [key: string]: string } = {
-	'general': `You are an expert at improving prompts for AI coding assistants.
+	'concise': `You are an expert at improving coding prompts efficiently with minimal elaboration.
 
-Your goal is to transform vague or incomplete prompts into highly detailed, actionable requests that will produce superior AI-generated code.
+Your goal: Transform the user's prompt into a clear, focused request using the fewest words necessary.
 
-Analyze the user's prompt and enhance it by:
-1. **Increasing clarity and specificity**: Transform general concepts into concrete, technical requirements with specific implementation details
-2. **Adding comprehensive technical context**: Include language versions, frameworks, libraries, coding patterns, and architectural considerations
-3. **Defining explicit constraints and requirements**: Specify what should and should NOT be done, including error handling, validation, security, performance, and edge cases
-4. **Structuring for clarity**: Use bullet points, numbered lists, and clear sections to organize complex requirements
-5. **Specifying detailed output expectations**: State exact format, level of detail, code structure, documentation needs, and any examples required
-6. **Including examples and scenarios**: Add concrete use cases, input/output examples, or edge cases to illustrate requirements
-7. **Adding quality criteria**: Mention testing approaches, best practices, code quality standards, and maintainability concerns
+Apply these improvements:
+1. **Clarify the core requirement** - State exactly what needs to be built/changed
+2. **Add critical technical details** - Include only essential types, parameters, or constraints
+3. **Specify the output format** - What should the result look like?
+4. **Remove ambiguity** - Replace vague terms with specific technical language
 
-Return ONLY the improved prompt text itself (no meta-commentary, quotes, code blocks, or explanations about what you changed).
+Keep it brief and actionable. Use the provided workspace context (languages, technologies, files, Git status, conversation history) to make specific references without lengthy explanations.
 
-Make the improved prompt significantly more detailed and comprehensive than the original.`,
+Return ONLY the improved prompt text - no meta-commentary, quotes, or explanations.`,
 
-	'context-aware': `You are an expert at crafting highly detailed, context-aware prompts for AI coding assistants.
+	'balanced': `You are an expert at improving prompts for AI coding assistants with practical, well-balanced enhancements.
 
-Your task is to transform basic prompts into comprehensive, actionable requests that leverage workspace context to maximize code quality.
+Your goal: Transform the user's prompt into a clear, actionable request with good detail but without excessive elaboration.
 
-**IMPORTANT: You have access to the workspace context. Use this to make the improved prompt highly specific with explicit details about files, classes, functions, and patterns from the actual codebase. DO NOT include "@workspace" in the output - instead, extract and include specific contextual details explicitly.**
+Enhance the prompt by:
+1. **Clarify requirements** - Make the intent specific and unambiguous
+2. **Add practical technical details** - Include relevant types, APIs, patterns, and constraints
+3. **Specify important edge cases** - Cover common error scenarios and validation needs
+4. **Structure clearly** - Organize requirements logically with sections or bullet points
+5. **Define output expectations** - Describe the expected code structure and documentation level
 
-**Analysis Phase:**
-Evaluate the original prompt for:
-- Clarity: Is the intent immediately understandable with precise technical terminology?
-- Specificity: Are requirements concrete, measurable, and implementable?
-- Completeness: Is all necessary context provided, including edge cases and constraints?
-- Technical accuracy: Are technical terms, frameworks, and patterns used correctly?
+Use the provided workspace context (languages, technologies, open files, Git status, conversation history, project documentation) to:
+- Reference specific files, classes, or functions when relevant
+- Align with existing code patterns and conventions
+- Suggest appropriate frameworks/libraries already in use
+- Consider the current development activity (branch, recent commits, staged changes)
 
-**Enhancement Phase:**
-Transform the prompt by applying these techniques:
+Strike a balance between thoroughness and brevity. Focus on practical improvements that will produce quality code without over-engineering.
 
-1. **Extract and Include Specific Workspace Context**:
-   - Incorporate detected programming languages ({languages}) with version-specific features
-   - Reference frameworks and technologies ({technologies}) with their specific APIs and patterns
-   - Mention specific files from ({openFiles}) that are relevant to the task
-   - Include actual file names, class names, function names, and patterns you observe in the workspace
-   - Reference existing code patterns and conventions from the codebase
-   - Suggest following specific examples from similar code in the workspace
-   - If relevant, suggest using #file:path/to/file.ts syntax to reference specific files
+Return ONLY the improved prompt text - no meta-commentary, quotes, or explanations.`,
 
-2. **Maximize Technical Specificity**:
-   - Replace vague terms with precise technical requirements
-   - Specify exact APIs, methods, classes, or functions to use
-   - Include type definitions, interfaces, or schemas where applicable
-   - Define data structures, algorithm choices, and implementation patterns
+	'detailed': `You are an expert at crafting comprehensive, highly detailed prompts for AI coding assistants.
 
-3. **Add Comprehensive Constraints**:
-   - Security requirements (authentication, authorization, input validation, sanitization)
-   - Performance expectations (time complexity, space complexity, optimization targets)
-   - Compatibility needs (browser support, language versions, framework compatibility)
-   - Error handling strategies (try-catch, error types, user feedback, logging)
-   - Testing requirements (unit tests, integration tests, edge cases)
+Your goal: Transform the user's prompt into an exhaustive, well-structured request that considers all aspects of implementation, quality, and maintainability.
 
-4. **Structure for Maximum Clarity**:
-   - Use clear sections: Requirements, Constraints, Implementation Details, Expected Output
-   - Break complex requirements into numbered steps or bullet points
-   - Organize by priority or logical flow
-   - Separate functional from non-functional requirements
+Perform a thorough enhancement by:
 
-5. **Define Detailed Output Expectations**:
-   - Specify code structure (functions, classes, modules)
-   - Request specific documentation (inline comments, JSDoc, docstrings, README sections)
-   - Define examples needed (usage examples, test cases, configuration examples)
-   - Clarify level of detail (full implementation, skeleton, pseudo-code)
+1. **Maximize Clarity and Specificity**:
+   - Transform general concepts into precise technical requirements
+   - Use exact terminology for the languages/frameworks involved
+   - Eliminate all ambiguity through explicit definitions
+   - Break down complex requirements into clear, numbered steps
 
-6. **Include Contextual Examples**:
+2. **Leverage All Available Context**:
+   - Reference specific files, classes, functions, and patterns from the open files synopsis
+   - Align with existing code conventions and architectural patterns in the codebase
+   - Consider the current Git context (branch, working changes, recent commits) to understand what's being worked on
+   - Use conversation history to understand the broader task context
+   - Incorporate relevant information from project documentation files
+   - Suggest using #file:path/to/file syntax to reference specific files when appropriate
+
+3. **Add Comprehensive Technical Requirements**:
+   - Specify exact APIs, methods, classes, interfaces, or functions to use
+   - Include complete type definitions, schemas, or data structures
+   - Define algorithm choices and implementation patterns
+   - Specify language-specific features or idioms to leverage
+   - Detail framework-specific best practices
+
+4. **Define Extensive Constraints**:
+   - **Security**: Authentication, authorization, input validation, sanitization, XSS/CSRF protection
+   - **Performance**: Time/space complexity, optimization targets, caching strategies
+   - **Compatibility**: Browser/platform support, language versions, framework compatibility
+   - **Error Handling**: Try-catch patterns, error types, user feedback, logging strategies
+   - **Testing**: Unit tests, integration tests, edge cases, test data examples
+   - **Accessibility**: ARIA labels, keyboard navigation, screen reader support (if UI-related)
+
+5. **Structure for Maximum Clarity**:
+   - Organize into clear sections: Overview, Requirements, Constraints, Implementation Details, Testing, Documentation
+   - Use hierarchical bullet points or numbered lists
+   - Separate functional requirements from non-functional requirements
+   - Prioritize requirements (must-have vs. nice-to-have)
+
+6. **Specify Detailed Output Expectations**:
+   - Describe the complete code structure (files, classes, functions, modules)
+   - Request comprehensive documentation (inline comments, JSDoc/docstrings, README sections)
+   - Ask for usage examples, test cases, and configuration examples
+   - Clarify the level of implementation detail needed
+   - Specify code style preferences (if evident from open files)
+
+7. **Include Contextual Examples and Edge Cases**:
    - Provide input/output examples relevant to the tech stack
    - Reference similar patterns from the current codebase
-   - Suggest edge cases based on the technology being used
+   - List potential edge cases based on the technology and use case
+   - Suggest error scenarios to handle
+   - Consider internationalization, localization, or timezone issues if relevant
 
-**Output Requirements:**
-Return ONLY the comprehensive improved prompt text (no meta-commentary, quotes, or code blocks).
+Be thorough and comprehensive. The improved prompt should leave no room for ambiguity and should guide the AI to produce production-ready, well-tested, maintainable code.
 
-The improved prompt should be significantly more detailed, actionable, and context-aware than the original.`,
-
-	'concise': `You are an expert at improving coding prompts efficiently.
-
-Transform the user's prompt by:
-1. Making requirements more specific and measurable
-2. Adding essential technical details (types, error handling, validation)
-3. Clarifying expected output format
-4. Keeping it focused and actionable
-
-Return ONLY the improved prompt text - be thorough but concise.`
+Return ONLY the comprehensive improved prompt text - no meta-commentary, quotes, or explanations.`
 };
-
-/**
- * Update the systemPrompt setting to show the current preset content
- */
-async function updateSystemPromptDisplay() {
-	const config = vscode.workspace.getConfiguration('promptImprover');
-	const preset = config.get<string>('systemPromptPreset', 'context-aware');
-	const customPrompt = config.get<string>('customSystemPrompt', '').trim();
-	
-	let displayPrompt = '';
-	
-	if (preset === 'custom') {
-		// For custom preset, show the custom prompt (empty if not set)
-		displayPrompt = customPrompt;
-	} else {
-		// For other presets, show the preset content
-		displayPrompt = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['context-aware'];
-	}
-	
-	console.log(`[Prompt Improver] Updating systemPrompt display for preset: ${preset}`);
-	console.log(`[Prompt Improver] Display prompt length: ${displayPrompt.length} characters`);
-
-	// Update Global settings (always available)
-	try {
-		await config.update('systemPrompt', displayPrompt, vscode.ConfigurationTarget.Global);
-		console.log(`[Prompt Improver] Successfully updated systemPrompt in Global settings`);
-	} catch (error) {
-		console.error(`[Prompt Improver] Error updating systemPrompt in Global settings:`, error);
-	}
-
-	// Update Workspace settings only if a workspace is open
-	if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0) {
-		try {
-			await config.update('systemPrompt', displayPrompt, vscode.ConfigurationTarget.Workspace);
-			console.log(`[Prompt Improver] Successfully updated systemPrompt in Workspace settings`);
-		} catch (error) {
-			console.error(`[Prompt Improver] Error updating systemPrompt in Workspace settings:`, error);
-		}
-	}
-}
 
 /**
  * Get the system prompt based on user configuration or override
  */
 function getSystemPrompt(overridePreset?: string): string {
 	const config = vscode.workspace.getConfiguration('promptImprover');
-	const preset = overridePreset || config.get<string>('systemPromptPreset', 'context-aware');
-	const customPrompt = config.get<string>('customSystemPrompt', '').trim();
+	const preset = overridePreset || config.get<string>('systemPromptPreset', 'detailed');
 
-	// If custom preset, use ONLY the custom prompt
-	if (preset === 'custom') {
-		if (customPrompt) {
-			return customPrompt;
-		}
-		// Fallback to context-aware if custom is empty
-		console.warn('Custom preset selected but customSystemPrompt is empty. Using context-aware preset.');
-		return SYSTEM_PROMPT_PRESETS['context-aware'];
-	}
+	// Get the preset content, or use the manually edited systemPrompt if it differs from presets
+	const currentSystemPrompt = config.get<string>('systemPrompt', '');
+	const presetPrompt = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['detailed'];
 
-	// For other presets, get the preset content
-	const presetPrompt = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['context-aware'];
-
-	// If there's a custom prompt and no override is specified, append it to the preset
-	if (customPrompt && !overridePreset) {
-		return `${presetPrompt}\n\n**Additional Instructions:**\n${customPrompt}`;
+	// If user has manually edited the systemPrompt field, use that instead
+	const presetPrompts = Object.values(SYSTEM_PROMPT_PRESETS);
+	if (currentSystemPrompt && !presetPrompts.includes(currentSystemPrompt)) {
+		console.log('[Prompt Improver] Using manually edited system prompt');
+		return currentSystemPrompt;
 	}
 
 	return presetPrompt;
 }
 
 /**
- * Determine whether to gather rich context based on settings and preset
+ * Extract intelligent synopsis from code file
  */
-function determineContextRichness(contextRichness: string, preset?: string): boolean {
-	// Explicit user choice
-	if (contextRichness === 'rich') {
-		return true;
-	}
-	if (contextRichness === 'minimal') {
-		return false;
+function extractCodeSynopsis(text: string, language: string): string {
+	const lines = text.split('\n');
+	const synopsis: string[] = [];
+
+	// Language-specific patterns for important code elements
+	const patterns = {
+		// Imports/requires
+		imports: /^(import|from|require|using|#include|package)\s+/,
+		// Exports
+		exports: /^(export|module\.exports|exports\.|public\s+class|public\s+interface)/,
+		// Class definitions
+		classes: /^(class|interface|struct|enum|type\s+\w+\s*=)/,
+		// Function/method definitions
+		functions: /(function\s+\w+|const\s+\w+\s*=\s*\(|def\s+\w+|fn\s+\w+|func\s+\w+|public\s+\w+\s+\w+\s*\(|private\s+\w+\s+\w+\s*\()/,
+		// Type definitions
+		types: /^(type|interface|typedef|struct)\s+\w+/,
+		// Constants and important variables
+		constants: /^(const|let|var|final|static\s+final|#define)\s+[A-Z_][A-Z0-9_]*\s*=/,
+		// Comments (for context)
+		comments: /^\s*(\/\/|\/\*\*|\*|#|<!--)/
+	};
+
+	let inMultilineComment = false;
+	let commentBuffer: string[] = [];
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		const trimmed = line.trim();
+
+		// Skip empty lines
+		if (!trimmed) {
+			continue;
+		}
+
+		// Track multiline comments
+		if (trimmed.startsWith('/*') || trimmed.startsWith('/**')) {
+			inMultilineComment = true;
+			commentBuffer = [line];
+			continue;
+		}
+		if (inMultilineComment) {
+			commentBuffer.push(line);
+			if (trimmed.includes('*/')) {
+				inMultilineComment = false;
+				// Only include JSDoc-style comments
+				if (commentBuffer[0].includes('/**')) {
+					synopsis.push(...commentBuffer);
+				}
+				commentBuffer = [];
+			}
+			continue;
+		}
+
+		// Check if line matches any important pattern
+		let isImportant = false;
+
+		if (patterns.imports.test(trimmed)) {
+			synopsis.push(line);
+			isImportant = true;
+		} else if (patterns.exports.test(trimmed)) {
+			synopsis.push(line);
+			// Include next few lines for context (function signature, etc.)
+			for (let j = 1; j <= 3 && i + j < lines.length; j++) {
+				const nextLine = lines[i + j];
+				synopsis.push(nextLine);
+				if (nextLine.includes('{') || nextLine.includes(';')) {
+					break;
+				}
+			}
+			isImportant = true;
+		} else if (patterns.classes.test(trimmed)) {
+			synopsis.push(line);
+			// Include class signature
+			for (let j = 1; j <= 2 && i + j < lines.length; j++) {
+				const nextLine = lines[i + j];
+				synopsis.push(nextLine);
+				if (nextLine.includes('{')) {
+					break;
+				}
+			}
+			isImportant = true;
+		} else if (patterns.functions.test(line)) {
+			synopsis.push(line);
+			// Include function signature
+			for (let j = 1; j <= 2 && i + j < lines.length; j++) {
+				const nextLine = lines[i + j];
+				synopsis.push(nextLine);
+				if (nextLine.includes('{') || nextLine.includes(';')) {
+					break;
+				}
+			}
+			isImportant = true;
+		} else if (patterns.types.test(trimmed)) {
+			synopsis.push(line);
+			isImportant = true;
+		} else if (patterns.constants.test(trimmed)) {
+			synopsis.push(line);
+			isImportant = true;
+		} else if (patterns.comments.test(trimmed) && trimmed.startsWith('//')) {
+			// Include single-line comments for context
+			synopsis.push(line);
+		}
+
+		// Limit synopsis to avoid token bloat
+		if (synopsis.length > 150) {
+			synopsis.push('... [synopsis truncated for brevity]');
+			break;
+		}
 	}
 
-	// Auto mode: decide based on preset
-	// Use rich context for context-aware preset, minimal for others
-	const activePreset = preset || vscode.workspace.getConfiguration('promptImprover').get<string>('systemPromptPreset', 'context-aware');
+	return synopsis.join('\n');
+}
 
-	return activePreset === 'context-aware';
+/**
+ * Gather intelligent synopsis from currently open files
+ */
+async function gatherOpenFileContents(): Promise<OpenFileContents> {
+	const contents: OpenFileContents = {
+		files: []
+	};
+
+	try {
+		const visibleEditors = vscode.window.visibleTextEditors;
+
+		for (const editor of visibleEditors) {
+			try {
+				const document = editor.document;
+
+				// Skip untitled documents and non-file schemes
+				if (document.uri.scheme !== 'file') {
+					continue;
+				}
+
+				const relativePath = vscode.workspace.asRelativePath(document.uri);
+				const fullText = document.getText();
+				const lines = fullText.split('\n');
+
+				// Extract intelligent synopsis instead of raw content
+				const synopsis = extractCodeSynopsis(fullText, document.languageId);
+
+				contents.files.push({
+					path: relativePath,
+					content: synopsis,
+					language: document.languageId,
+					lineCount: lines.length,
+					truncated: synopsis.includes('[synopsis truncated')
+				});
+			} catch (fileError) {
+				// Error processing individual file, skip it
+				console.warn('[Prompt Improver] Error processing open file:', fileError);
+				continue;
+			}
+		}
+	} catch (error) {
+		// Error accessing editors
+		console.error('[Prompt Improver] Error gathering open file contents:', error);
+	}
+
+	return contents;
+}
+
+/**
+ * Gather Git context from the workspace
+ */
+async function gatherGitContext(): Promise<GitContext> {
+	const context: GitContext = {};
+
+	const workspaceFolders = vscode.workspace.workspaceFolders;
+	if (!workspaceFolders || workspaceFolders.length === 0) {
+		return context;
+	}
+
+	const workspaceRoot = workspaceFolders[0].uri.fsPath;
+
+	try {
+		// Get current branch
+		const branchResult = await execGitCommand(workspaceRoot, 'git rev-parse --abbrev-ref HEAD');
+		if (branchResult) {
+			context.branch = branchResult.trim();
+		}
+
+		// Get status
+		const statusResult = await execGitCommand(workspaceRoot, 'git status --short');
+		if (statusResult) {
+			context.status = statusResult.trim();
+		}
+
+		// Get staged changes (diff)
+		const stagedResult = await execGitCommand(workspaceRoot, 'git diff --cached --stat');
+		if (stagedResult) {
+			context.stagedChanges = stagedResult.trim();
+		}
+
+		// Get last 10 commits
+		const logResult = await execGitCommand(
+			workspaceRoot,
+			'git log -10 --pretty=format:"%h|%s|%an|%ar"'
+		);
+		if (logResult) {
+			const commits = logResult.trim().split('\n').map(line => {
+				const [hash, message, author, date] = line.split('|');
+				return { hash, message, author, date };
+			});
+			context.recentCommits = commits;
+		}
+	} catch (error) {
+		console.error('Error gathering Git context:', error);
+		// Return partial context if available
+	}
+
+	return context;
+}
+
+/**
+ * Execute a Git command with timeout
+ */
+async function execGitCommand(cwd: string, command: string): Promise<string | null> {
+	try {
+		const { exec } = require('child_process');
+		const { promisify } = require('util');
+		const execAsync = promisify(exec);
+
+		// Add timeout to prevent hanging
+		const timeoutMs = 10000; // 10 seconds
+		const result = await Promise.race([
+			execAsync(command, {
+				cwd,
+				maxBuffer: 1024 * 1024,
+				timeout: timeoutMs
+			}),
+			new Promise((_, reject) =>
+				setTimeout(() => reject(new Error('Git command timeout')), timeoutMs)
+			)
+		]);
+
+		return (result as any).stdout;
+	} catch (error) {
+		// Git command failed (not a git repo, command error, or timeout)
+		if (error instanceof Error) {
+			console.warn(`[Prompt Improver] Git command failed: ${error.message}`);
+		}
+		return null;
+	}
 }
 
 /**
@@ -841,22 +1625,89 @@ function extractConversationHistory(context: vscode.ChatContext): ConversationHi
 }
 
 /**
+ * Generate a concise summary of the conversation history
+ * This helps the LLM understand what the user has been working on
+ */
+function generateConversationSummary(conversationHistory: ConversationHistory): string {
+	if (conversationHistory.requests.length === 0 && conversationHistory.responses.length === 0) {
+		return 'No prior conversation.';
+	}
+
+	let summary = '';
+
+	// Analyze the conversation to extract key themes
+	const allRequests = conversationHistory.requests.map(r => r.prompt).join(' ');
+	const allResponses = conversationHistory.responses.join(' ');
+
+	// Count conversation turns
+	const turnCount = Math.max(conversationHistory.requests.length, conversationHistory.responses.length);
+
+	summary += `**Conversation Overview:** ${turnCount} exchange${turnCount > 1 ? 's' : ''} in this session.\n\n`;
+
+	// Identify what they're working on based on recent requests
+	const recentRequests = conversationHistory.requests.slice(-5);
+	if (recentRequests.length > 0) {
+		summary += `**Recent Topics:**\n`;
+		recentRequests.forEach((req, idx) => {
+			const commandPrefix = req.command ? `/${req.command} ` : '';
+			// Truncate long prompts but keep them readable
+			const truncatedPrompt = req.prompt.length > 80 
+				? req.prompt.substring(0, 80) + '...' 
+				: req.prompt;
+			summary += `${idx + 1}. ${commandPrefix}${truncatedPrompt}\n`;
+		});
+		summary += '\n';
+	}
+
+	// Try to identify the main task
+	const taskKeywords = ['create', 'add', 'implement', 'fix', 'update', 'refactor', 'build', 'write', 'generate'];
+	const mainTasks: string[] = [];
+
+	for (const req of conversationHistory.requests) {
+		const lowerPrompt = req.prompt.toLowerCase();
+		for (const keyword of taskKeywords) {
+			if (lowerPrompt.includes(keyword)) {
+				// Extract a snippet around the keyword
+				const index = lowerPrompt.indexOf(keyword);
+				const snippet = req.prompt.substring(Math.max(0, index - 10), Math.min(req.prompt.length, index + 60));
+				mainTasks.push(snippet.trim());
+				break;
+			}
+		}
+	}
+
+	if (mainTasks.length > 0) {
+		summary += `**Key Tasks Identified:**\n`;
+		// Show up to 3 most recent main tasks
+		const recentTasks = mainTasks.slice(-3);
+		recentTasks.forEach((task, idx) => {
+			summary += `- ${task}\n`;
+		});
+		summary += '\n';
+	}
+
+	return summary;
+}
+
+/**
  * Build the prompt for improving user prompts
  */
 function buildImprovePrompt(
 	userPrompt: string,
-	workspaceContext: WorkspaceContext,
+	workspaceContext: WorkspaceContext | undefined,
 	overridePreset?: string,
 	references?: readonly vscode.ChatPromptReference[],
 	conversationHistory?: ConversationHistory,
-	markdownContext?: MarkdownContext
+	markdownContext?: MarkdownContext,
+	openFileContents?: OpenFileContents,
+	gitContext?: GitContext
 ): string {
 	const systemPromptTemplate = getSystemPrompt(overridePreset);
 
 	// Build context strings
-	const languages = workspaceContext.languages.join(', ') || 'Unknown';
-	const technologies = workspaceContext.technologies.join(', ') || 'Unknown';
-	const openFiles = workspaceContext.openFiles.length > 0 ? workspaceContext.openFiles.join(', ') : 'None';
+	const languages = workspaceContext?.languages.join(', ') || 'Unknown';
+	const technologies = workspaceContext?.technologies.join(', ') || 'Unknown';
+	const openFiles = workspaceContext?.openFiles.length ? workspaceContext.openFiles.join(', ') : 'None';
 
 	// Format references if any
 	let referencesContext = '';
@@ -889,26 +1740,26 @@ function buildImprovePrompt(
 	// Format conversation history if any
 	let historyContext = '';
 	if (conversationHistory && (conversationHistory.requests.length > 0 || conversationHistory.responses.length > 0)) {
-		historyContext = '\n\n**Conversation History:**\n';
-		historyContext += 'The user has been having a conversation in this chat session. Use this context to understand what they are working on and provide more relevant improvements.\n\n';
+		historyContext = '\n\n**Conversation Context:**\n';
+		historyContext += 'The user has been having a conversation in this chat session. Below is a summary of what they\'re working on:\n\n';
 
-		// Include recent conversation turns (limit to last 5 exchanges to avoid token limits)
-		const maxTurns = 5;
-		const recentRequests = conversationHistory.requests.slice(-maxTurns);
-		const recentResponses = conversationHistory.responses.slice(-maxTurns);
+		// Generate a concise summary of the conversation
+		const summary = generateConversationSummary(conversationHistory);
+		historyContext += summary;
 
-		for (let i = 0; i < Math.max(recentRequests.length, recentResponses.length); i++) {
-			if (i < recentRequests.length) {
-				const req = recentRequests[i];
-				historyContext += `User: ${req.command ? `/${req.command} ` : ''}${req.prompt}\n`;
-			}
-			if (i < recentResponses.length) {
-				// Truncate long responses to avoid token bloat
-				const response = recentResponses[i];
-				const truncated = response.length > 200 ? response.substring(0, 200) + '...' : response;
-				historyContext += `Assistant: ${truncated}\n\n`;
-			}
+		// Also include the most recent exchange for immediate context
+		historyContext += '\n\n**Most Recent Exchange:**\n';
+		if (conversationHistory.requests.length > 0) {
+			const lastRequest = conversationHistory.requests[conversationHistory.requests.length - 1];
+			historyContext += `User: ${lastRequest.command ? `/${lastRequest.command} ` : ''}${lastRequest.prompt}\n`;
 		}
+		if (conversationHistory.responses.length > 0) {
+			const lastResponse = conversationHistory.responses[conversationHistory.responses.length - 1];
+			const truncated = lastResponse.length > 300 ? lastResponse.substring(0, 300) + '...' : lastResponse;
+			historyContext += `Assistant: ${truncated}\n`;
+		}
+
+		historyContext += '\n**Important:** Use this conversation context to ensure the improved prompt is aware of what the user is currently working on and their recent progress.\n';
 	}
 
 	// Format markdown context files if any
@@ -922,6 +1773,51 @@ function buildImprovePrompt(
 		}
 
 		markdownContextSection += 'Use the information from these files to make the improved prompt more specific and aligned with project conventions.\n';
+	}
+
+	// Format open file contents if any
+	let openFileContentsSection = '';
+	if (openFileContents && openFileContents.files.length > 0) {
+		openFileContentsSection = '\n\n**Open File Synopsis:**\n';
+		openFileContentsSection += 'The following is an intelligent synopsis of currently open files, showing key code elements (imports, exports, classes, functions, types):\n\n';
+
+		for (const file of openFileContents.files) {
+			openFileContentsSection += `--- ${file.path} (${file.language}, ${file.lineCount} lines total) ---\n`;
+			openFileContentsSection += `${file.content}\n`;
+			if (file.truncated) {
+				openFileContentsSection += `\n[Synopsis truncated for brevity]\n`;
+			}
+			openFileContentsSection += '\n';
+		}
+
+		openFileContentsSection += 'Use the structure and patterns from these open files to provide more specific and contextual improvements that align with the existing codebase.\n';
+	}
+
+	// Format Git context if any
+	let gitContextSection = '';
+	if (gitContext && (gitContext.branch || gitContext.status || gitContext.recentCommits)) {
+		gitContextSection = '\n\n**Git Context:**\n';
+
+		if (gitContext.branch) {
+			gitContextSection += `- Current Branch: ${gitContext.branch}\n`;
+		}
+
+		if (gitContext.status) {
+			gitContextSection += `- Working Directory Status:\n${gitContext.status}\n`;
+		}
+
+		if (gitContext.stagedChanges) {
+			gitContextSection += `- Staged Changes:\n${gitContext.stagedChanges}\n`;
+		}
+
+		if (gitContext.recentCommits && gitContext.recentCommits.length > 0) {
+			gitContextSection += `- Recent Commits (last 10):\n`;
+			for (const commit of gitContext.recentCommits) {
+				gitContextSection += `  ${commit.hash} - ${commit.message} (${commit.author}, ${commit.date})\n`;
+			}
+		}
+
+		gitContextSection += '\nUse this Git context to understand what the user is currently working on and recent development activity.\n';
 	}
 
 	// Replace placeholders in the system prompt
@@ -940,7 +1836,7 @@ ${userPrompt}
 **Workspace Context:**
 - Programming Languages: ${languages}
 - Frameworks/Technologies: ${technologies}
-- Open Files: ${openFiles}${referencesContext}${historyContext}${markdownContextSection}
+- Open Files: ${openFiles}${referencesContext}${historyContext}${markdownContextSection}${openFileContentsSection}${gitContextSection}
 
 Return the improved prompt now (plain text only, no markdown formatting, no wrapper text):`;
 }
@@ -977,35 +1873,51 @@ async function gatherWorkspaceContext(): Promise<WorkspaceContext> {
 		openFiles: []
 	};
 
-	// Get open text editors
-	const openEditors = vscode.window.visibleTextEditors;
-	
-	if (openEditors.length > 0) {
-		const languageSet = new Set<string>();
-		
-		for (const editor of openEditors) {
-			// Get language
-			const languageId = editor.document.languageId;
-			if (languageId && languageId !== 'plaintext') {
-				languageSet.add(languageId);
+	try {
+		// Get open text editors
+		const openEditors = vscode.window.visibleTextEditors;
+
+		if (openEditors.length > 0) {
+			const languageSet = new Set<string>();
+
+			for (const editor of openEditors) {
+				try {
+					// Get language
+					const languageId = editor.document.languageId;
+					if (languageId && languageId !== 'plaintext') {
+						languageSet.add(languageId);
+					}
+
+					// Get file name
+					const fileName = editor.document.fileName;
+					if (fileName) {
+						const relativePath = vscode.workspace.asRelativePath(fileName);
+						context.openFiles.push(relativePath);
+					}
+				} catch (editorError) {
+					// Error processing individual editor, skip it
+					console.warn('[Prompt Improver] Error processing editor:', editorError);
+					continue;
+				}
 			}
-			
-			// Get file name
-			const fileName = editor.document.fileName;
-			if (fileName) {
-				const relativePath = vscode.workspace.asRelativePath(fileName);
-				context.openFiles.push(relativePath);
+
+			context.languages = Array.from(languageSet);
+		}
+
+		// Try to detect technologies from workspace files
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		if (workspaceFolders && workspaceFolders.length > 0) {
+			try {
+				const technologies = await detectTechnologies(workspaceFolders[0]);
+				context.technologies = technologies;
+			} catch (techError) {
+				// Error detecting technologies, continue with empty array
+				console.warn('[Prompt Improver] Error detecting technologies:', techError);
 			}
 		}
-		
-		context.languages = Array.from(languageSet);
-	}
-
-	// Try to detect technologies from workspace files
-	const workspaceFolders = vscode.workspace.workspaceFolders;
-	if (workspaceFolders && workspaceFolders.length > 0) {
-		const technologies = await detectTechnologies(workspaceFolders[0]);
-		context.technologies = technologies;
+	} catch (error) {
+		// Error gathering workspace context
+		console.error('[Prompt Improver] Error gathering workspace context:', error);
 	}
 
 	return context;
@@ -1049,25 +1961,109 @@ async function detectTechnologies(workspaceFolder: vscode.WorkspaceFolder): Prom
 }
 
 /**
+ * Check if the response stream is still open and safe to write to
+ */
+function isStreamOpen(stream: vscode.ChatResponseStream): boolean {
+	try {
+		// Try to access a property to see if stream is still valid
+		// This is a defensive check - if the stream is closed, accessing it may throw
+		return stream !== null && stream !== undefined;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Safely write to stream with error handling
+ */
+function safeStreamWrite(stream: vscode.ChatResponseStream, content: string, type: 'markdown' | 'progress' = 'markdown'): boolean {
+	try {
+		if (!isStreamOpen(stream)) {
+			console.warn('[Prompt Improver] Attempted to write to closed stream');
+			return false;
+		}
+
+		if (type === 'markdown') {
+			stream.markdown(content);
+		} else {
+			stream.progress(content);
+		}
+		return true;
+	} catch (error) {
+		// Stream is closed or invalid
+		if (error instanceof Error && error.message.includes('closed')) {
+			console.warn('[Prompt Improver] Stream was closed during write operation');
+		} else {
+			console.error('[Prompt Improver] Error writing to stream:', error);
+		}
+		return false;
+	}
+}
+
+/**
+ * Check if operation was cancelled
+ */
+function isCancelled(token: vscode.CancellationToken): boolean {
+	return token.isCancellationRequested;
+}
+
+/**
  * Handle errors and display user-friendly messages
  */
 function handleError(error: unknown, stream: vscode.ChatResponseStream): void {
+	// Check if stream is still open before trying to write
+	if (!isStreamOpen(stream)) {
+		console.error('[Prompt Improver] Cannot display error - stream is closed:', error);
+		return;
+	}
+
 	if (error instanceof vscode.LanguageModelError) {
-		console.error('Language Model Error:', error.message, error.code);
-		
+		console.error('[Prompt Improver] Language Model Error:', error.message, error.code);
+
 		// Check error codes using string comparison
 		if (error.code === 'notFound') {
-			stream.markdown('⚠️ No language model found. Please ensure GitHub Copilot is installed and active.');
+			safeStreamWrite(stream, '⚠️ **No language model found.** Please ensure GitHub Copilot is installed and active.\n\n');
 		} else if (error.code === 'blocked') {
-			stream.markdown('⚠️ The request was blocked. The prompt might contain sensitive content.');
+			safeStreamWrite(stream, '⚠️ **Request blocked.** The prompt might contain sensitive content. Try rephrasing your request.\n\n');
 		} else if (error.code === 'noPermissions') {
-			stream.markdown('⚠️ No permissions to use the language model. Please check your GitHub Copilot subscription.');
+			safeStreamWrite(stream, '⚠️ **No permissions.** Please check your GitHub Copilot subscription is active.\n\n');
+		} else if (error.code === 'rateLimited') {
+			safeStreamWrite(stream, '⚠️ **Rate limited.** Too many requests. Please wait a moment and try again.\n\n');
 		} else {
-			stream.markdown(`⚠️ Language model error: ${error.message}`);
+			safeStreamWrite(stream, `⚠️ **Language model error:** ${error.message}\n\n`);
+		}
+	} else if (error instanceof Error) {
+		console.error('[Prompt Improver] Error:', error.message, error.stack);
+
+		// Handle specific error types
+		if (error.message.includes('closed') || error.message.includes('stream')) {
+			// Stream was closed (user cancelled or navigated away)
+			console.warn('[Prompt Improver] Operation cancelled - stream closed');
+			// Don't try to write to stream if it's a stream error
+			return;
+		} else if (error.message.includes('No lowest priority node found') || error.message.includes('priority node')) {
+			// VS Code's workspace tools system has a bug
+			safeStreamWrite(stream, '⚠️ **VS Code Workspace Tools Error**\n\n');
+			safeStreamWrite(stream, 'VS Code\'s experimental workspace tools system encountered an internal error. This is a known issue with VS Code, not the Prompt Improver extension.\n\n');
+			safeStreamWrite(stream, '**Workaround:** Disable the "Use Workspace Tools" setting:\n');
+			safeStreamWrite(stream, '1. Open Settings (Ctrl+,)\n');
+			safeStreamWrite(stream, '2. Search for "Prompt Improver: Use Workspace Tools"\n');
+			safeStreamWrite(stream, '3. Uncheck the box\n\n');
+			safeStreamWrite(stream, 'The extension will still gather rich context using its built-in context gathering features.\n\n');
+		} else if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+			safeStreamWrite(stream, '⚠️ **Request timeout.** The operation took too long. Please try again.\n\n');
+		} else if (error.message.includes('ENOENT') || error.message.includes('not found')) {
+			safeStreamWrite(stream, '⚠️ **File not found.** The requested file or resource could not be found.\n\n');
+		} else if (error.message.includes('EACCES') || error.message.includes('permission denied')) {
+			safeStreamWrite(stream, '⚠️ **Permission denied.** Cannot access the requested resource.\n\n');
+		} else if (error.message.includes('git')) {
+			safeStreamWrite(stream, '⚠️ **Git error.** Could not retrieve Git context. Continuing without Git information.\n\n');
+		} else {
+			safeStreamWrite(stream, `⚠️ **Error:** ${error.message}\n\nPlease try again or check the console for more details.\n\n`);
 		}
 	} else {
-		console.error('Unexpected error:', error);
-		stream.markdown('⚠️ An unexpected error occurred. Please try again.');
+		console.error('[Prompt Improver] Unexpected error:', error);
+		safeStreamWrite(stream, '⚠️ **An unexpected error occurred.** Please try again.\n\n');
 	}
 }
 
@@ -1090,6 +2086,28 @@ interface MarkdownContext {
 		path: string;
 		content: string;
 		relevanceScore: number;
+	}>;
+}
+
+interface OpenFileContents {
+	files: Array<{
+		path: string;
+		content: string;
+		language: string;
+		lineCount: number;
+		truncated: boolean;
+	}>;
+}
+
+interface GitContext {
+	branch?: string;
+	status?: string;
+	stagedChanges?: string;
+	recentCommits?: Array<{
+		hash: string;
+		message: string;
+		author: string;
+		date: string;
 	}>;
 }
 
