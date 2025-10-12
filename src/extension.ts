@@ -172,12 +172,10 @@ async function handleImproveCommand(
 	
 	// Stream the response
 	stream.markdown('## Improved Prompt\n\n');
-	stream.markdown('```\n');
 	for await (const fragment of chatResponse.text) {
 		improvedPrompt += fragment;
 		stream.markdown(fragment);
 	}
-	stream.markdown('\n```\n');
 
 	stream.markdown('\n\n---\n\n');
 	
@@ -189,7 +187,7 @@ async function handleImproveCommand(
 		arguments: [cleanPrompt]
 	});
 	
-	stream.markdown('\n\n💡 **Tip:** Click the button above to copy, or select the text from the code block and use Ctrl+C.\n');
+	stream.markdown('\n\n💡 **Tip:** Click the button above to copy, or select the text and use Ctrl+C.\n');
 }
 
 /**
@@ -239,36 +237,93 @@ async function handleAnalyzeCommand(
 }
 
 /**
+ * System prompt presets
+ */
+const SYSTEM_PROMPT_PRESETS: { [key: string]: string } = {
+	'general': `You are an expert at improving prompts for AI coding assistants.
+
+Analyze the user's prompt and enhance it by:
+1. **Increasing clarity**: Make the intent immediately obvious
+2. **Adding specificity**: Replace vague terms with concrete requirements
+3. **Structuring information**: Use formatting to organize complex requests
+4. **Defining output expectations**: Specify what format or level of detail is needed
+5. **Removing ambiguity**: Ensure there's only one clear interpretation
+
+Return ONLY the improved prompt text itself (no meta-commentary, quotes, code blocks, or explanations).`,
+
+	'context-aware': `You are an expert at crafting context-aware prompts for AI coding assistants.
+
+Your task is to enhance prompts using workspace context to maximize effectiveness.
+
+**Analysis:**
+- Evaluate clarity, specificity, completeness, and technical accuracy
+- Identify missing context that could improve the response
+
+**Enhancement:**
+- **Leverage context**: Incorporate programming languages ({languages}), frameworks ({technologies}), and relevant open files ({openFiles}) when applicable
+- **Increase specificity**: Replace vague terms with concrete requirements
+- **Add constraints**: Include compatibility, performance, or style requirements based on the tech stack
+- **Structure clearly**: Use formatting for complex requirements
+- **Specify expectations**: State desired output format and level of detail
+- **Reference patterns**: Mention existing code patterns or conventions when relevant
+
+**Output:**
+Return ONLY the improved prompt text (no meta-commentary, quotes, or code blocks).`,
+
+	'concise': `Improve this coding prompt by making it more specific, clear, and actionable. Keep it concise.
+
+Return ONLY the improved prompt text.`
+};
+
+/**
+ * Get the system prompt based on user configuration
+ */
+function getSystemPrompt(): string {
+	const config = vscode.workspace.getConfiguration('promptImprover');
+	const preset = config.get<string>('systemPromptPreset', 'context-aware');
+
+	// If custom preset, use the custom prompt
+	if (preset === 'custom') {
+		const customPrompt = config.get<string>('customSystemPrompt', '');
+		if (customPrompt.trim()) {
+			return customPrompt;
+		}
+		// Fallback to context-aware if custom is empty
+		console.warn('Custom prompt selected but customSystemPrompt is empty. Using context-aware preset.');
+	}
+
+	// Return the appropriate preset
+	return SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['context-aware'];
+}
+
+/**
  * Build the prompt for improving user prompts
  */
 function buildImprovePrompt(userPrompt: string, workspaceContext: WorkspaceContext): string {
-	return `You are an expert at crafting effective prompts for AI coding assistants like GitHub Copilot.
-
-Your task is to improve the following prompt to make it more effective for getting better AI responses.
+	const systemPromptTemplate = getSystemPrompt();
+	
+	// Build context strings
+	const languages = workspaceContext.languages.join(', ') || 'Unknown';
+	const technologies = workspaceContext.technologies.join(', ') || 'Unknown';
+	const openFiles = workspaceContext.openFiles.length > 0 ? workspaceContext.openFiles.join(', ') : 'None';
+	
+	// Replace placeholders in the system prompt
+	let systemPrompt = systemPromptTemplate
+		.replace(/\{userPrompt\}/g, userPrompt)
+		.replace(/\{languages\}/g, languages)
+		.replace(/\{technologies\}/g, technologies)
+		.replace(/\{openFiles\}/g, openFiles);
+	
+	// Build the final prompt with context
+	return `${systemPrompt}
 
 **Original Prompt:**
 ${userPrompt}
 
 **Workspace Context:**
-- Programming Languages: ${workspaceContext.languages.join(', ') || 'Unknown'}
-- Frameworks/Technologies: ${workspaceContext.technologies.join(', ') || 'Unknown'}
-- Open Files: ${workspaceContext.openFiles.length > 0 ? workspaceContext.openFiles.join(', ') : 'None'}
-
-**Instructions:**
-1. Analyze the original prompt for clarity, specificity, and completeness
-2. Improve the prompt by:
-   - Making it more specific and clear
-   - Adding relevant context from the workspace when appropriate
-   - Including best practices or constraints that would help
-   - Structuring it for better readability
-3. Return ONLY the improved prompt text itself - no headers, no quotes, no explanations, no "Key Improvements" section
-
-**Important:** Focus on making the prompt work better with coding assistants. Consider:
-- Technical precision
-- Clear requirements
-- Appropriate scope
-- Relevant constraints
-- Expected output format
+- Programming Languages: ${languages}
+- Frameworks/Technologies: ${technologies}
+- Open Files: ${openFiles}
 
 Return the improved prompt now (plain text only, no markdown formatting, no wrapper text):`;
 }
