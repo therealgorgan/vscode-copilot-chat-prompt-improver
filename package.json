@@ -21,14 +21,23 @@
     "AI",
     "Chat"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
+        "command": "prompt-improver.selectModel",
+        "title": "Select Model from Available Options",
+        "category": "Prompt Improver",
+        "icon": "$(symbol-misc)"
+      },
+      {
         "command": "prompt-improver.listAvailableModels",
         "title": "List Available Copilot Models",
-        "category": "Prompt Improver"
+        "category": "Prompt Improver",
+        "icon": "$(list-unordered)"
       }
     ],
     "chatParticipants": [
@@ -42,6 +51,22 @@
           {
             "name": "improve",
             "description": "Analyze and improve a chat prompt"
+          },
+          {
+            "name": "improve-general",
+            "description": "Improve prompt using the General preset"
+          },
+          {
+            "name": "improve-context",
+            "description": "Improve prompt using the Context-aware preset"
+          },
+          {
+            "name": "improve-concise",
+            "description": "Improve prompt using the Concise preset"
+          },
+          {
+            "name": "improve-custom",
+            "description": "Improve prompt using your Custom preset"
           },
           {
             "name": "analyze",
@@ -65,75 +90,6 @@
     "configuration": {
       "title": "Prompt Improver",
       "properties": {
-        "promptImprover.modelVendor": {
-          "type": "string",
-          "default": "copilot",
-          "enum": [
-            "copilot",
-            "auto"
-          ],
-          "enumDescriptions": [
-            "Use GitHub Copilot models",
-            "Use any available model provider"
-          ],
-          "description": "Select which language model vendor to use for prompt improvement"
-        },
-        "promptImprover.modelFamily": {
-          "type": "string",
-          "default": "gpt-4o",
-          "enum": [
-            "",
-            "gpt-4o",
-            "gpt-4o-mini",
-            "gpt-4",
-            "gpt-4-turbo",
-            "gpt-4.1",
-            "gpt-5",
-            "gpt-5-mini",
-            "gpt-5-codex",
-            "gpt-3.5-turbo",
-            "o3",
-            "o3-mini",
-            "o4-mini",
-            "claude-3.5-sonnet",
-            "claude-3.7-sonnet",
-            "claude-3.7-sonnet-thought",
-            "claude-sonnet-4",
-            "claude-sonnet-4.5",
-            "claude-opus-4",
-            "claude-opus-4.1",
-            "gemini-2.0-flash",
-            "gemini-2.5-pro",
-            "grok-code"
-          ],
-          "enumDescriptions": [
-            "Default - Use the default model selected by the provider",
-            "GPT-4o - Latest GPT-4 optimized model (recommended)",
-            "GPT-4o mini - Faster, lightweight version of GPT-4o",
-            "GPT-4 - Original GPT-4 model",
-            "GPT-4 Turbo - Previous generation high-capability model",
-            "GPT-4.1 - Enhanced GPT-4 model",
-            "GPT-5 - Next generation GPT model",
-            "GPT-5 mini - Lightweight GPT-5 model",
-            "GPT-5-Codex (Preview) - Specialized coding model",
-            "GPT 3.5 Turbo - Fast and efficient for simpler tasks",
-            "o3 (Preview) - Advanced reasoning model",
-            "o3-mini - Lightweight reasoning model",
-            "o4-mini (Preview) - Next-gen mini reasoning model",
-            "Claude Sonnet 3.5 - Anthropic's capable model",
-            "Claude Sonnet 3.7 - Enhanced Anthropic model",
-            "Claude Sonnet 3.7 Thinking - Claude with extended reasoning",
-            "Claude Sonnet 4 - Latest Claude Sonnet generation",
-            "Claude Sonnet 4.5 (Preview) - Preview of next Claude version",
-            "Claude Opus 4 - Most capable Claude model",
-            "Claude Opus 4.1 - Enhanced Claude Opus",
-            "Gemini 2.0 Flash - Google's fast model",
-            "Gemini 2.5 Pro - Google's advanced model",
-            "Grok Code Fast 1 (Preview) - xAI's coding model"
-          ],
-          "markdownDescription": "**Model Family** - Select which model to use for prompt improvement.\n\n💡 Models are listed in order of capability. Different models offer different speeds and capabilities.\n\n**Note:** Available models depend on your GitHub Copilot subscription. If a model isn't working, run `Prompt Improver: List Available Copilot Models` to see what you have access to.",
-          "order": 3
-        },
         "promptImprover.systemPromptPreset": {
           "type": "string",
           "default": "context-aware",
@@ -145,26 +101,33 @@
           ],
           "enumDescriptions": [
             "General improvement - Balanced approach for any coding prompt",
-            "Context-aware - Leverages workspace context (languages, frameworks, open files)",
+            "Context-aware - Uses workspace context internally to provide specific, detailed improvements based on your actual codebase (files, classes, functions, patterns)",
             "Concise - Quick improvements with minimal overhead",
-            "Custom - Edit the 'System Prompt' setting below to define your own"
+            "Custom - Use only your custom instructions (no preset)"
           ],
-          "description": "Choose a preset system prompt or use 'custom' to define your own",
+          "description": "Choose a preset system prompt or use 'custom' for your own instructions. Changes take effect immediately.",
           "order": 0
         },
         "promptImprover.systemPrompt": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "**Current System Prompt** - View or edit the prompt used for improvements.\n\nThis field displays the active preset's content. When you make changes here, the preset will automatically switch to 'custom'.\n\n**Available placeholders:**\n- `{userPrompt}` - The user's original prompt\n- `{languages}` - Detected programming languages\n- `{technologies}` - Detected frameworks/technologies\n- `{openFiles}` - Currently open files",
+          "markdownDescription": "**Current Active System Prompt** - Shows and allows editing of the base prompt currently in use.\n\n**Note:** This field updates automatically when you change the preset above. Any manual edits will be overwritten when you select a different preset.\n\n**To customize:**\n- **For presets:** Use the 'Additional Custom Instructions' field below to add your requirements (they won't be overwritten)\n- **For custom mode:** Use the 'Additional Custom Instructions' field below to write your complete prompt\n\n**Available placeholders:**\n- `{userPrompt}` - The user's original prompt\n- `{languages}` - Detected programming languages\n- `{technologies}` - Detected frameworks/technologies\n- `{openFiles}` - Currently open files",
           "order": 1
         },
         "promptImprover.customSystemPrompt": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "**Custom System Prompt Storage** - Your custom prompt is automatically saved here when you edit the 'System Prompt' field above.\n\nYou can also edit this directly if you prefer.",
+          "markdownDescription": "**Additional Custom Instructions** - Add your own instructions that will be combined with the preset.\n\n**How it works:**\n- **When using presets** (General, Context-aware, Concise): Your custom instructions are appended to the preset\n- **When using Custom preset**: Only your custom instructions are used (preset is ignored)\n\nThis allows you to enhance presets with your own requirements without replacing them entirely.\n\n**Available placeholders:**\n- `{userPrompt}` - The user's original prompt\n- `{languages}` - Detected programming languages\n- `{technologies}` - Detected frameworks/technologies\n- `{openFiles}` - Currently open files",
           "order": 2
+        },
+        "promptImprover.modelFamily": {
+          "type": "string",
+          "default": "gpt-4o",
+          "editPresentation": "singlelineText",
+          "markdownDescription": "**Model Family** - Specify which model to use for prompt improvement.\n\nLeave empty to use the default model, or enter a model family name.\n\n**[Select Model from Available Options](command:prompt-improver.selectModel)** - Click to choose from a live list of available models.\n\n**[List Available Models](command:prompt-improver.listAvailableModels)** - View all available models with their details.\n\nAlternatively, you can manually enter a model family name (e.g., `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`).",
+          "order": 3
         }
       }
     }

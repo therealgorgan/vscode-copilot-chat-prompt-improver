@@ -68,15 +68,28 @@ Make it more specific and actionable.
 
 #### Choosing a Specific Model
 
-**Model Family** setting:
+You have **three ways** to select a model:
+
+**Method 1: Quick Pick (Recommended)**
+1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
+2. Run: "Prompt Improver: Select Model from Available Options"
+3. Choose from a live list of models available in your environment
+4. The setting is updated automatically
+
+**Method 2: Dropdown in Settings**
+1. Open Settings (Ctrl+, or Cmd+,)
+2. Search for "Prompt Improver"
+3. Use the **Model Family** dropdown
+4. Select from the pre-populated list
+
+**Method 3: Manual Entry**
+- Type any model family name directly into the **Model Family** field
+- Examples: `gpt-4o`, `gpt-4o-mini`, `claude-3.5-sonnet`, etc.
 - Leave empty for the default model
-- Enter a model name like `gpt-4o`, `gpt-4o-mini`, `claude-3.5-sonnet`, etc.
-- Available models depend on your Copilot subscription
 
 **To see what models are available:**
-1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
-2. Run: "Prompt Improver: List Available Copilot Models"
-3. This shows all models you can use
+- Run: "Prompt Improver: Select Model from Available Options" (shows interactive picker)
+- Or run: "Prompt Improver: List Available Copilot Models" (shows detailed list in panel)
 
 ### Settings Structure
 

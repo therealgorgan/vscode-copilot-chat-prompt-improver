@@ -175,14 +175,21 @@ Choose the improvement style that best fits your workflow:
 
 ### Model Selection
 
-Choose which AI model to use for prompt improvement:
+Choose which AI model to use for prompt improvement.
 
+**Quick Selection (Recommended):**
+1. Open Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
+2. Run: `Prompt Improver: Select Model from Available Options`
+3. Choose from the live list of available models
+
+**Manual Entry:**
 ```json
 {
-  "promptImprover.modelVendor": "copilot",
   "promptImprover.modelFamily": "gpt-4o"
 }
 ```
+
+Common options: `gpt-4o`, `gpt-4o-mini`, `claude-3.5-sonnet`, `gemini-2.5-pro`, `o3`
 
 ### Custom System Prompt
 
@@ -201,6 +208,13 @@ Create your own improvement instructions (when preset is set to `"custom"`):
 - `{openFiles}` - Currently open files
 
 [View detailed preset documentation →](PRESETS.md)
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| **Prompt Improver: Select Model from Available Options** | Interactive picker to choose your AI model |
+| **Prompt Improver: List Available Copilot Models** | View all available models in a panel |
 
 ## Tips for Better Prompts
 
