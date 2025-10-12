@@ -2,7 +2,7 @@
   "name": "prompt-improver",
   "displayName": "Prompt Improver",
   "description": "Improve your Copilot Chat prompts using AI and workspace context",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "TheRealGorgan",
   "author": {
     "name": "The Real Gorgan",
