@@ -1578,6 +1578,12 @@ function extractConversationHistory(context: vscode.ChatContext): ConversationHi
 				command: item.command
 			});
 		} else if (item instanceof vscode.ChatResponseTurn) {
+			// Skip responses from the prompt-improver participant itself
+			// We only want to see responses from the main Copilot agent or other participants
+			if (item.participant === PARTICIPANT_ID) {
+				continue;
+			}
+
 			// Extract participant responses (only text content)
 			const responseText = item.response
 				.map(part => {
