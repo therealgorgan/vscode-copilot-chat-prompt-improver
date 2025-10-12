@@ -961,52 +961,18 @@ function buildSummaryPrompt(
 	gitContext: GitContext | undefined,
 	userInstructions?: string
 ): string {
-	let prompt = `You are an expert at analyzing and summarizing technical conversations.
+    let prompt = `You are an expert at creating a neutral, factual record of a technical conversation.\n\nYour task is to produce a clear, concise conversation summary intended as a historical record. Focus on describing what was discussed and decided, not on assigning tasks.
+\n+Produce the following sections when possible:
+- Short overview (2-3 sentences) describing the main topic(s)
+- Timeline or bullet list of important exchanges / decisions
+- Key technical choices, constraints, or design notes mentioned
+- Notable references (files, commands, docs, links) mentioned during the conversation
+\n+Do NOT add step-by-step next actions, TODOs, or handoff instructions in this summary. Keep it objective and suitable for archiving or review.`;
 
-Your task is to analyze the conversation history and create a clear, concise summary that captures:
-1. **What the user has been working on** - The main task or problem being addressed
-2. **Current state** - What's been accomplished and what's still pending
-3. **Key decisions and constraints** - Important technical choices, requirements, or limitations discussed
-4. **Recent focus** - What the most recent exchanges have been about
-5. **Next steps** - What appears to be the logical next action or task
+	// Add conversation snippets for context (as source material for the record)
+	prompt += `\n\n**Conversation History (for reference):**\n`;
 
-**Format your summary as:**
-- Start with a brief overview (2-3 sentences)
-- Use bullet points for key details
-- Highlight any blockers or issues that came up
-- End with suggested next steps
-
-Keep it concise but informative - aim for clarity over completeness.`;
-
-	// Add workspace context
-	if (workspaceContext) {
-		prompt += `\n\n**Workspace Context:**\n`;
-		if (workspaceContext.languages.length > 0) {
-			prompt += `Languages: ${workspaceContext.languages.join(', ')}\n`;
-		}
-		if (workspaceContext.technologies.length > 0) {
-			prompt += `Technologies: ${workspaceContext.technologies.join(', ')}\n`;
-		}
-		if (workspaceContext.openFiles.length > 0) {
-			prompt += `Open files: ${workspaceContext.openFiles.slice(0, 5).join(', ')}${workspaceContext.openFiles.length > 5 ? '...' : ''}\n`;
-		}
-	}
-
-	// Add Git context
-	if (gitContext) {
-		prompt += `\n**Git Context:**\n`;
-		if (gitContext.branch) {
-			prompt += `Branch: ${gitContext.branch}\n`;
-		}
-		if (gitContext.status) {
-			prompt += `Status: ${gitContext.status.split('\n').slice(0, 3).join(', ')}\n`;
-		}
-	}
-
-	// Add conversation history
-	prompt += `\n**Conversation History:**\n`;
-
-	const maxTurns = 20; // Include more history for summary
+	const maxTurns = 40; // include a larger slice for archival summaries
 	const recentRequests = conversationHistory.requests.slice(-maxTurns);
 	const recentResponses = conversationHistory.responses.slice(-maxTurns);
 
@@ -1017,18 +983,25 @@ Keep it concise but informative - aim for clarity over completeness.`;
 		}
 		if (i < recentResponses.length) {
 			const response = recentResponses[i];
-			// Truncate very long responses but keep more context than improve command
-			const truncated = response.length > 800 ? response.substring(0, 800) + '... [truncated]' : response;
+			const truncated = response.length > 1000 ? response.substring(0, 1000) + '... [truncated]' : response;
 			prompt += `\nAssistant: ${truncated}`;
 		}
 	}
 
-	// Add user instructions if provided
-	if (userInstructions && userInstructions.trim()) {
-		prompt += `\n\n**Additional Instructions:**\n${userInstructions}`;
+	// Add optional workspace/git metadata only as brief references (do not convert into tasks)
+	if (workspaceContext) {
+		prompt += `\n\n**Workspace:** Languages: ${workspaceContext.languages.join(', ') || 'N/A'}; Technologies: ${workspaceContext.technologies.join(', ') || 'N/A'}; Open files: ${workspaceContext.openFiles.slice(0,5).join(', ') || 'N/A'}`;
 	}
 
-	prompt += `\n\nNow provide a clear, actionable summary of this conversation.`;
+	if (gitContext) {
+		prompt += `\n**Git:** Branch: ${gitContext.branch || 'N/A'}; Status (top lines): ${gitContext.status ? gitContext.status.split('\n').slice(0,3).join(' | ') : 'N/A'}`;
+	}
+
+	if (userInstructions && userInstructions.trim()) {
+		prompt += `\n\n**Additional Notes from Requester:**\n${userInstructions}`;
+	}
+
+	prompt += `\n\nNow produce a concise, neutral conversation record following the sections described above. This is intended for archival/review (do NOT produce task checklists or handoff instructions).`;
 
 	return prompt;
 }
@@ -1042,52 +1015,34 @@ function buildHandoffPrompt(
 	gitContext: GitContext | undefined,
 	userInstructions?: string
 ): string {
-	let prompt = `You are an expert at creating comprehensive context-preserving prompts for AI agent handoffs.
+    let prompt = `You are an expert at producing concise, task-focused handoff prompts for the next agent.
 
-Your task is to analyze the conversation history and create a single, comprehensive prompt that can be used to start a new chat session while preserving all the important context.
+Your goal: Produce a single prompt that a new agent can paste into a fresh chat to continue work immediately.
 
-**Goal:** Create a prompt that allows a new AI agent to seamlessly continue the work without losing any important context.
+The handoff must include (when available):
+1. Short summary of what was being worked on (one or two sentences)
+2. Current state: what's completed, what's pending, and any partially implemented pieces
+3. Explicit high-priority tasks that should be done next (clear, numbered)
+4. Known blockers or open issues (errors, missing info, permissions, environment problems)
+5. Key decisions, constraints, or required context (APIs, files, branches, test commands)
+6. Relevant references: file paths, commands, commit SHAs, or docs to consult
 
-**Requirements:**
-1. Summarize what the user has been working on
-2. Include the current state of the work (what's been done, what's pending)
-3. Preserve any important technical decisions, constraints, or requirements discussed
-4. Include the most recent request or task (this is likely what needs to continue)
-5. Add relevant workspace context (languages, technologies, files being worked on)
-6. Make it clear, actionable, and ready to paste into a new chat
+**Format requirements:**
+- Start with a 1-2 sentence summary
+- Follow with a numbered "Next Actions" list (priority order)
+- Then a short "Blockers" section listing what prevents progress and how to resolve it
+- Then a "Context & References" section with brief pointers (files, branches, commands)
 
-**Format:** Return ONLY the handoff prompt text - no meta-commentary, no explanations, just the prompt itself.
+Return ONLY the handoff prompt text. Do NOT include extra exposition or analysis. Make the instructions actionable and explicit.`;
 
-`;
-
-	// Add workspace context
-	if (workspaceContext) {
-		prompt += `\n**Current Workspace:**\n`;
-		prompt += `- Languages: ${workspaceContext.languages.join(', ')}\n`;
-		prompt += `- Technologies: ${workspaceContext.technologies.join(', ')}\n`;
-		if (workspaceContext.openFiles.length > 0) {
-			prompt += `- Open Files: ${workspaceContext.openFiles.slice(0, 10).join(', ')}${workspaceContext.openFiles.length > 10 ? '...' : ''}\n`;
-		}
-	}
-
-	// Add Git context
-	if (gitContext) {
-		if (gitContext.branch) {
-			prompt += `- Current Branch: ${gitContext.branch}\n`;
-		}
-		if (gitContext.status) {
-			prompt += `- Git Status: ${gitContext.status.split('\n').slice(0, 5).join(', ')}\n`;
-		}
-	}
-
-	// Add conversation history
+	// Extract recent work and convert into sections
+	const maxTurns = 12;
 	if (conversationHistory && (conversationHistory.requests.length > 0 || conversationHistory.responses.length > 0)) {
-		prompt += `\n**Conversation History (last 10 exchanges):**\n`;
-
-		const maxTurns = 10;
 		const recentRequests = conversationHistory.requests.slice(-maxTurns);
 		const recentResponses = conversationHistory.responses.slice(-maxTurns);
 
+		// Build a concise snapshot for the handoff: last user request and assistant response pairings
+		prompt += `\n\n**Recent Exchanges (for reference):**\n`;
 		for (let i = 0; i < Math.max(recentRequests.length, recentResponses.length); i++) {
 			if (i < recentRequests.length) {
 				const req = recentRequests[i];
@@ -1095,19 +1050,25 @@ Your task is to analyze the conversation history and create a single, comprehens
 			}
 			if (i < recentResponses.length) {
 				const response = recentResponses[i];
-				// Truncate very long responses but keep more context than before
-				const truncated = response.length > 500 ? response.substring(0, 500) + '... [truncated]' : response;
+				const truncated = response.length > 600 ? response.substring(0, 600) + '... [truncated]' : response;
 				prompt += `\nAssistant: ${truncated}\n`;
 			}
 		}
 	}
 
-	// Add user instructions if provided
-	if (userInstructions && userInstructions.trim().length > 0) {
-		prompt += `\n**Additional Instructions:**\n${userInstructions}\n`;
+	// Add concise workspace/git references to help locate things quickly
+	if (workspaceContext) {
+		prompt += `\n\n**Workspace Reference:** Languages: ${workspaceContext.languages.join(', ') || 'N/A'}; Open files: ${workspaceContext.openFiles.slice(0,10).join(', ') || 'N/A'}`;
+	}
+	if (gitContext) {
+		prompt += `\n**Git Reference:** Branch: ${gitContext.branch || 'N/A'}; Status (top lines): ${gitContext.status ? gitContext.status.split('\n').slice(0,3).join(' | ') : 'N/A'}`;
 	}
 
-	prompt += `\n**Now create the handoff prompt:**`;
+	if (userInstructions && userInstructions.trim().length > 0) {
+		prompt += `\n\n**Requester Notes:**\n${userInstructions}\n`;
+	}
+
+	prompt += `\n\n**Now create the single handoff prompt following the format specified above.**`;
 
 	return prompt;
 }

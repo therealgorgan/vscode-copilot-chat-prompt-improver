@@ -4,7 +4,7 @@
 
 A VS Code extension that analyzes and improves your GitHub Copilot Chat prompts using AI and rich workspace context.
 
-[![Version](https://img.shields.io/badge/version-0.0.9-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.0.10-blue.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
