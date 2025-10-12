@@ -15,6 +15,20 @@ const PARTICIPANT_ID = 'prompt-improver.prompt-improver';
 export function activate(context: vscode.ExtensionContext) {
 	console.log('Prompt Improver extension is now active!');
 
+	// Initialize the systemPrompt setting with the current preset value
+	updateSystemPromptDisplay();
+
+	// Watch for configuration changes
+	const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
+		if (e.affectsConfiguration('promptImprover.systemPromptPreset')) {
+			// When preset changes, update the systemPrompt display
+			updateSystemPromptDisplay();
+		} else if (e.affectsConfiguration('promptImprover.systemPrompt')) {
+			// When systemPrompt is edited manually, check if it differs from current preset
+			handleSystemPromptEdit();
+		}
+	});
+
 	// Register the copy command
 	const stripImprovedPrompt = (text: string) => {
 		if (!text) { return ''; }
@@ -55,7 +69,14 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	};
 
-	context.subscriptions.push(participant, copyCommand);
+	// Command to list available models (for debugging/info)
+	const listModelsCommand = vscode.commands.registerCommand('prompt-improver.listAvailableModels', async () => {
+		const models = await vscode.lm.selectChatModels({});
+		const modelInfo = models.map(m => `${m.vendor}/${m.family} (${m.id})`).join('\n');
+		vscode.window.showInformationMessage(`Available Models:\n${modelInfo}`, { modal: true });
+	});
+
+	context.subscriptions.push(participant, copyCommand, configWatcher, listModelsCommand);
 }
 
 /**
@@ -274,6 +295,59 @@ Return ONLY the improved prompt text (no meta-commentary, quotes, or code blocks
 
 Return ONLY the improved prompt text.`
 };
+
+/**
+ * Update the systemPrompt setting to show the current preset content
+ */
+function updateSystemPromptDisplay() {
+	const config = vscode.workspace.getConfiguration('promptImprover');
+	const preset = config.get<string>('systemPromptPreset', 'context-aware');
+	
+	let displayPrompt = '';
+	
+	if (preset === 'custom') {
+		// For custom, show the stored custom prompt
+		displayPrompt = config.get<string>('customSystemPrompt', '');
+	} else {
+		// For presets, show the preset content
+		displayPrompt = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['context-aware'];
+	}
+	
+	// Update the systemPrompt setting (silently, without triggering change event recursion)
+	const currentSystemPrompt = config.get<string>('systemPrompt', '');
+	if (currentSystemPrompt !== displayPrompt) {
+		config.update('systemPrompt', displayPrompt, vscode.ConfigurationTarget.Global);
+	}
+}
+
+/**
+ * Handle manual edits to the systemPrompt setting
+ */
+function handleSystemPromptEdit() {
+	const config = vscode.workspace.getConfiguration('promptImprover');
+	const currentPreset = config.get<string>('systemPromptPreset', 'context-aware');
+	const editedPrompt = config.get<string>('systemPrompt', '');
+	
+	// Check if the edited prompt differs from the current preset
+	let presetPrompt = '';
+	if (currentPreset === 'custom') {
+		presetPrompt = config.get<string>('customSystemPrompt', '');
+	} else {
+		presetPrompt = SYSTEM_PROMPT_PRESETS[currentPreset] || '';
+	}
+	
+	// If user edited the prompt and it's different from the preset, switch to custom
+	if (editedPrompt !== presetPrompt && currentPreset !== 'custom') {
+		// Save the edited prompt as the custom prompt
+		config.update('customSystemPrompt', editedPrompt, vscode.ConfigurationTarget.Global);
+		// Switch to custom preset
+		config.update('systemPromptPreset', 'custom', vscode.ConfigurationTarget.Global);
+		vscode.window.showInformationMessage('Switched to custom system prompt preset');
+	} else if (currentPreset === 'custom' && editedPrompt !== presetPrompt) {
+		// Update the custom prompt storage
+		config.update('customSystemPrompt', editedPrompt, vscode.ConfigurationTarget.Global);
+	}
+}
 
 /**
  * Get the system prompt based on user configuration

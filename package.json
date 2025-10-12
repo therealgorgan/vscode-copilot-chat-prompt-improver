@@ -24,6 +24,13 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "prompt-improver.listAvailableModels",
+        "title": "List Available Copilot Models",
+        "category": "Prompt Improver"
+      }
+    ],
     "chatParticipants": [
       {
         "id": "prompt-improver.prompt-improver",
@@ -74,7 +81,29 @@
         "promptImprover.modelFamily": {
           "type": "string",
           "default": "gpt-4o",
-          "description": "Model family to use (e.g., 'gpt-4o', 'gpt-4o-mini', 'gpt-4'). Leave empty to use the default model."
+          "enum": [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo",
+            "gpt-4",
+            "gpt-3.5-turbo",
+            "o1-preview",
+            "o1-mini",
+            "claude-3.5-sonnet",
+            ""
+          ],
+          "enumDescriptions": [
+            "GPT-4o - Latest and most capable model (recommended)",
+            "GPT-4o Mini - Faster, lightweight version of GPT-4o",
+            "GPT-4 Turbo - Previous generation high-capability model",
+            "GPT-4 - Original GPT-4 model",
+            "GPT-3.5 Turbo - Fast and efficient for simpler tasks",
+            "O1 Preview - Advanced reasoning model (preview)",
+            "O1 Mini - Lightweight reasoning model",
+            "Claude 3.5 Sonnet - Anthropic's latest model (if available)",
+            "Default - Use the default model selected by the provider"
+          ],
+          "description": "Select which model to use for prompt improvement. Different models offer different capabilities and speeds."
         },
         "promptImprover.systemPromptPreset": {
           "type": "string",
@@ -89,23 +118,29 @@
             "General improvement - Balanced approach for any coding prompt",
             "Context-aware - Leverages workspace context (languages, frameworks, open files)",
             "Concise - Quick improvements with minimal overhead",
-            "Custom - Use your own system prompt (edit promptImprover.customSystemPrompt)"
+            "Custom - Edit the 'System Prompt' setting below to define your own"
           ],
-          "description": "Choose a preset system prompt or use 'custom' to define your own"
+          "description": "Choose a preset system prompt or use 'custom' to define your own",
+          "order": 0
+        },
+        "promptImprover.systemPrompt": {
+          "type": "string",
+          "default": "",
+          "editPresentation": "multilineText",
+          "markdownDescription": "**Current System Prompt** - View or edit the prompt used for improvements.\n\nThis field displays the active preset's content. When you make changes here, the preset will automatically switch to 'custom'.\n\n**Available placeholders:**\n- `{userPrompt}` - The user's original prompt\n- `{languages}` - Detected programming languages\n- `{technologies}` - Detected frameworks/technologies\n- `{openFiles}` - Currently open files",
+          "order": 1
+        },
         },
         "promptImprover.customSystemPrompt": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "Your custom system prompt (used when preset is set to 'custom').\n\n**Available placeholders:**\n- `{userPrompt}` - The user's original prompt\n- `{languages}` - Detected programming languages\n- `{technologies}` - Detected frameworks/technologies\n- `{openFiles}` - Currently open files"
-        },
-        "promptImprover.systemPrompt": {
-          "type": "string",
-          "default": "You are an expert at crafting effective prompts for AI coding assistants like GitHub Copilot, Cursor, and similar tools.\n\nYour task is to analyze and enhance prompts to maximize their effectiveness in generating high-quality AI responses for coding tasks.\n\n**Analysis Phase:**\n1. Evaluate the original prompt for:\n   - Clarity: Is the intent immediately understandable?\n   - Specificity: Are requirements concrete and measurable?\n   - Completeness: Is all necessary context provided?\n   - Ambiguity: Are there multiple interpretations possible?\n   - Technical accuracy: Are technical terms used correctly?\n\n**Enhancement Phase:**\n2. Improve the prompt by applying these techniques:\n   - **Increase specificity**: Replace vague terms with concrete requirements (e.g., \"handle errors\" → \"implement try-catch blocks with specific error types and user-friendly messages\")\n   - **Add contextual information**: Include relevant details about the codebase, language version, frameworks, coding standards, or architectural patterns when applicable\n   - **Define constraints explicitly**: Specify what should NOT be done, performance requirements, compatibility needs, or style guidelines\n   - **Structure for clarity**: Use formatting (bullet points, numbered lists, sections) to organize complex requirements\n   - **Specify output expectations**: Clearly state what format, level of detail, or type of response is expected\n   - **Include examples when helpful**: Add input/output examples or code snippets to illustrate requirements\n   - **Remove redundancy**: Eliminate repetitive or unnecessary information\n\n**Output Requirements:**\n3. Return ONLY the improved prompt text itself\n   - Do NOT include meta-commentary like \"Here is the improved prompt:\" or \"Enhanced version:\"\n   - Do NOT wrap the output in quotes, code blocks, or XML tags\n   - Do NOT add explanations of what you changed or why\n   - The output should be ready to use directly as a prompt\n\n**Quality Criteria for Coding Prompts:**\nConsider these factors when enhancing:\n- **Technical precision**: Use correct terminology for languages, frameworks, and patterns\n- **Clear requirements**: State functional and non-functional requirements explicitly\n- **Appropriate scope**: Ensure the task is neither too broad nor too narrow\n- **Actionable constraints**: Include relevant limitations (browser compatibility, dependencies, performance targets)\n- **Expected output format**: Specify if you need code only, code with comments, explanations, tests, etc.\n- **Context awareness**: Reference existing code patterns, file structures, or conventions when relevant\n- **Error handling**: Mention how errors or edge cases should be addressed\n- **Testing considerations**: Include whether tests are needed or how validation should occur",
-          "editPresentation": "multilineText",
-          "markdownDescription": "⚠️ **DEPRECATED**: Use `promptImprover.systemPromptPreset` and `promptImprover.customSystemPrompt` instead. This setting is kept for backward compatibility.",
-          "deprecationMessage": "Use promptImprover.systemPromptPreset and promptImprover.customSystemPrompt instead"
+          "markdownDescription": "⚠️ **Internal use only** - This stores your custom prompt when using the 'custom' preset. Edit the 'System Prompt' field above instead.",
+          "order": 99
         }
+      }
+    }
+  },
       }
     }
   },
