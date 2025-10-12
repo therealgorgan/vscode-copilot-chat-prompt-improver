@@ -388,12 +388,15 @@ async function handleImproveCommand(
 	// Extract any references (like #file, @workspace, etc.)
 	const references = request.references || [];
 
+	// Extract conversation history
+	const conversationHistory = extractConversationHistory(context);
+
 	// Gather workspace context
 	stream.progress('Gathering workspace context...');
 	const workspaceContext = await gatherWorkspaceContext();
 
 	// Build the prompt for the LLM
-	const systemPrompt = buildImprovePrompt(userPrompt, workspaceContext, overridePreset, references);
+	const systemPrompt = buildImprovePrompt(userPrompt, workspaceContext, overridePreset, references, conversationHistory);
 
 	// Get the configured language model
 	const model = await getConfiguredModel();
@@ -661,13 +664,52 @@ function getSystemPrompt(overridePreset?: string): string {
 }
 
 /**
+ * Extract conversation history from chat context
+ */
+function extractConversationHistory(context: vscode.ChatContext): ConversationHistory {
+	const history: ConversationHistory = {
+		requests: [],
+		responses: []
+	};
+
+	// Filter and extract previous messages
+	for (const item of context.history) {
+		if (item instanceof vscode.ChatRequestTurn) {
+			// Extract user requests
+			history.requests.push({
+				prompt: item.prompt,
+				command: item.command
+			});
+		} else if (item instanceof vscode.ChatResponseTurn) {
+			// Extract participant responses (only text content)
+			const responseText = item.response
+				.map(part => {
+					if (part instanceof vscode.ChatResponseMarkdownPart) {
+						return part.value.value;
+					}
+					return '';
+				})
+				.join('\n')
+				.trim();
+
+			if (responseText) {
+				history.responses.push(responseText);
+			}
+		}
+	}
+
+	return history;
+}
+
+/**
  * Build the prompt for improving user prompts
  */
 function buildImprovePrompt(
 	userPrompt: string,
 	workspaceContext: WorkspaceContext,
 	overridePreset?: string,
-	references?: readonly vscode.ChatPromptReference[]
+	references?: readonly vscode.ChatPromptReference[],
+	conversationHistory?: ConversationHistory
 ): string {
 	const systemPromptTemplate = getSystemPrompt(overridePreset);
 
@@ -704,6 +746,31 @@ function buildImprovePrompt(
 		referencesContext = `\n\n**User included these references:**\n${refList}\n\nIMPORTANT: Include these same references at the beginning of the improved prompt.`;
 	}
 
+	// Format conversation history if any
+	let historyContext = '';
+	if (conversationHistory && (conversationHistory.requests.length > 0 || conversationHistory.responses.length > 0)) {
+		historyContext = '\n\n**Conversation History:**\n';
+		historyContext += 'The user has been having a conversation in this chat session. Use this context to understand what they are working on and provide more relevant improvements.\n\n';
+
+		// Include recent conversation turns (limit to last 5 exchanges to avoid token limits)
+		const maxTurns = 5;
+		const recentRequests = conversationHistory.requests.slice(-maxTurns);
+		const recentResponses = conversationHistory.responses.slice(-maxTurns);
+
+		for (let i = 0; i < Math.max(recentRequests.length, recentResponses.length); i++) {
+			if (i < recentRequests.length) {
+				const req = recentRequests[i];
+				historyContext += `User: ${req.command ? `/${req.command} ` : ''}${req.prompt}\n`;
+			}
+			if (i < recentResponses.length) {
+				// Truncate long responses to avoid token bloat
+				const response = recentResponses[i];
+				const truncated = response.length > 200 ? response.substring(0, 200) + '...' : response;
+				historyContext += `Assistant: ${truncated}\n\n`;
+			}
+		}
+	}
+
 	// Replace placeholders in the system prompt
 	let systemPrompt = systemPromptTemplate
 		.replace(/\{userPrompt\}/g, userPrompt)
@@ -720,7 +787,7 @@ ${userPrompt}
 **Workspace Context:**
 - Programming Languages: ${languages}
 - Frameworks/Technologies: ${technologies}
-- Open Files: ${openFiles}${referencesContext}
+- Open Files: ${openFiles}${referencesContext}${historyContext}
 
 Return the improved prompt now (plain text only, no markdown formatting, no wrapper text):`;
 }
@@ -855,6 +922,14 @@ interface WorkspaceContext {
 	languages: string[];
 	technologies: string[];
 	openFiles: string[];
+}
+
+interface ConversationHistory {
+	requests: Array<{
+		prompt: string;
+		command?: string;
+	}>;
+	responses: string[];
 }
 
 // This method is called when your extension is deactivated
