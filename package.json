@@ -108,7 +108,7 @@
           "type": "string",
           "default": "",
           "editPresentation": "singlelineText",
-          "markdownDescription": "**Model Selection:** Specify which model to use for prompt improvement, or leave empty to use the current chat model.\n\n**Leave empty** (recommended): Uses whatever model you have selected in Copilot Chat (falls back to gpt-4o-mini if no model is selected)  \n**Specify a model**: Always use a specific model (e.g., `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`)\n\n**Default fallback**: gpt-4o-mini (fastest, free with Copilot subscription)\n\n**Commands:**  \n[Select Model](command:prompt-improver.selectModel) | [List Available Models](command:prompt-improver.listAvailableModels)",
+          "markdownDescription": "**Model Selection:** Specify which model to use for prompt improvement, or leave empty to use the current chat model.\n\n**Leave empty** (recommended): Uses whatever model you have selected in Copilot Chat (falls back to gpt-5-mini if no model is selected)  \n**Specify a model**: Always use a specific model (e.g., `gpt-4o`, `claude-sonnet-4`, `gemini-2.5-pro`)\n\n**Default fallback**: gpt-5-mini (recommended default)\n\n**Commands:**  \n[Select Model](command:prompt-improver.selectModel) | [List Available Models](command:prompt-improver.listAvailableModels)",
           "order": 2
         },
         "promptImprover.includeWorkspaceMetadata": {

@@ -297,11 +297,11 @@ async function getConfiguredModel(currentChatModel?: vscode.LanguageModelChat): 
 			console.log(`[Prompt Improver] Using current chat model: ${currentChatModel.family} (${currentChatModel.name})`);
 			return currentChatModel;
 		}
-		// Fallback to gpt-4o-mini (fastest, free with Copilot subscription)
-		console.log('[Prompt Improver] No model configured and no current chat model, using gpt-4o-mini as default');
+		// Fallback to gpt-5-mini (recommended default)
+		console.log('[Prompt Improver] No model configured and no current chat model, using gpt-5-mini as default');
 		const selector: { vendor: string; family: string } = {
 			vendor: 'copilot',
-			family: 'gpt-4o-mini'
+			family: 'gpt-5-mini'
 		};
 		const models = await vscode.lm.selectChatModels(selector);
 		if (models.length > 0) {
@@ -680,7 +680,8 @@ async function handleImproveCommand(
 			vscode.LanguageModelChatMessage.User(systemPrompt)
 		];
 
-		safeStreamWrite(stream, 'Improving your prompt...', 'progress');
+	// Show clearer generation label while the model is generating the improved prompt
+	safeStreamWrite(stream, 'Generating improved prompt...', 'progress');
 
 		// Send request to language model with tools
 		const chatResponse = await model.sendRequest(messages, requestOptions, token);
