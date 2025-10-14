@@ -694,6 +694,10 @@ async function handleImproveCommand(
 			return; // Stream closed
 		}
 
+		// Provide an immediate progress hint so users aren't left staring at an empty header
+		// while the model starts streaming. This helps on slower models/providers.
+		safeStreamWrite(stream, '*Generating response from model...*\n\n', 'progress');
+
 		for await (const fragment of chatResponse.text) {
 			// Check for cancellation during streaming
 			if (isCancelled(token)) {
