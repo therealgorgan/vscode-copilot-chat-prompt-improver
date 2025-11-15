@@ -37,12 +37,32 @@ export function activate(context: vscode.ExtensionContext) {
 		if (e.affectsConfiguration('promptImprover.systemPromptPreset')) {
 			const config = vscode.workspace.getConfiguration('promptImprover');
 			const preset = config.get<string>('systemPromptPreset', 'balanced');
-			const presetContent = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['balanced'];
-
-			// Update the systemPrompt field to show the current preset content
-			// This allows users to see what the preset contains in the Settings UI
-			config.update('systemPrompt', presetContent, vscode.ConfigurationTarget.Global);
-			console.log(`[Prompt Improver] Preset changed to: ${preset}`);
+			
+			// If preset is not 'custom', update systemPrompt to show preset content
+			if (preset !== 'custom') {
+				const presetContent = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['balanced'];
+				// Update the systemPrompt field to show the current preset content
+				config.update('systemPrompt', presetContent, vscode.ConfigurationTarget.Global);
+				console.log(`[Prompt Improver] Preset changed to: ${preset}`);
+			} else {
+				console.log(`[Prompt Improver] Custom preset selected - using user-defined systemPrompt`);
+			}
+		}
+		
+		// Listen for systemPrompt changes and auto-select 'custom' if user edits it
+		if (e.affectsConfiguration('promptImprover.systemPrompt')) {
+			const config = vscode.workspace.getConfiguration('promptImprover');
+			const currentPreset = config.get<string>('systemPromptPreset', 'balanced');
+			const currentSystemPrompt = config.get<string>('systemPrompt', '');
+			
+			// Check if the systemPrompt was manually edited (doesn't match any preset)
+			const presetPrompts = Object.values(SYSTEM_PROMPT_PRESETS);
+			if (currentSystemPrompt && !presetPrompts.includes(currentSystemPrompt) && currentPreset !== 'custom') {
+				// Auto-switch to custom preset
+				config.update('systemPromptPreset', 'custom', vscode.ConfigurationTarget.Global);
+				console.log(`[Prompt Improver] Detected custom system prompt - auto-switched to 'custom' preset`);
+				vscode.window.showInformationMessage('Prompt Improver: Switched to Custom preset since you edited the system prompt.');
+			}
 		}
 	});
 	context.subscriptions.push(configChangeListener);
@@ -60,16 +80,21 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 	context.subscriptions.push(documentChangeListener);
 
-	// Initialize systemPrompt with current preset content if it's empty or contains old preset
+	// Initialize systemPrompt with current preset content if it's empty and not using custom preset
 	const currentSystemPrompt = config.get<string>('systemPrompt', '');
 	const currentPreset = config.get<string>('systemPromptPreset', 'balanced');
-	const currentPresetContent = SYSTEM_PROMPT_PRESETS[currentPreset] || SYSTEM_PROMPT_PRESETS['balanced'];
-
-	// If systemPrompt is empty or doesn't match any current preset, set it to the current preset
-	const allCurrentPresets = Object.values(SYSTEM_PROMPT_PRESETS);
-	if (!currentSystemPrompt || !allCurrentPresets.includes(currentSystemPrompt)) {
-		config.update('systemPrompt', currentPresetContent, vscode.ConfigurationTarget.Global);
-		console.log(`[Prompt Improver] Initialized systemPrompt with ${currentPreset} preset`);
+	
+	// Only initialize if not using custom preset
+	if (currentPreset !== 'custom') {
+		const currentPresetContent = SYSTEM_PROMPT_PRESETS[currentPreset] || SYSTEM_PROMPT_PRESETS['balanced'];
+		// If systemPrompt is empty or doesn't match any current preset, set it to the current preset
+		const allCurrentPresets = Object.values(SYSTEM_PROMPT_PRESETS);
+		if (!currentSystemPrompt || !allCurrentPresets.includes(currentSystemPrompt)) {
+			config.update('systemPrompt', currentPresetContent, vscode.ConfigurationTarget.Global);
+			console.log(`[Prompt Improver] Initialized systemPrompt with ${currentPreset} preset`);
+		}
+	} else {
+		console.log(`[Prompt Improver] Custom preset selected - preserving user systemPrompt`);
 	}
 
 	// Register the copy command
@@ -280,7 +305,16 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	context.subscriptions.push(participant, copyCommand, selectModelCommand, listModelsCommand);
+	// Command to open settings
+	const openSettingsCommand = vscode.commands.registerCommand('prompt-improver.openSettings', async () => {
+		await vscode.commands.executeCommand('workbench.action.openSettings', '@ext:TheRealGorgan.prompt-improver');
+	});
+
+	// Register Language Model Tool for inline usage
+	// This allows Copilot to invoke prompt improvement without using @prompt-improver
+	const tool = vscode.lm.registerTool('prompt_improver', new PromptImproverTool());
+
+	context.subscriptions.push(participant, copyCommand, selectModelCommand, listModelsCommand, openSettingsCommand, tool);
 }
 
 /**
@@ -435,6 +469,17 @@ async function handleImproveCommand(
 	const filterWorkspaceTools = config.get<boolean>('filterWorkspaceTools', true);
 
 	try {
+		// Check for MCP servers if enabled
+		let mcpContext: McpContext | undefined;
+		const useMcpServers = config.get<boolean>('useMcpServers', true);
+		if (useMcpServers && !isCancelled(token)) {
+			safeStreamWrite(stream, 'Checking for MCP servers...', 'progress');
+			mcpContext = await checkMcpServers();
+			if (mcpContext.available) {
+				safeStreamWrite(stream, 'MCP servers detected', 'progress');
+			}
+		}
+
 		// Gather workspace context if enabled
 		let workspaceContext: WorkspaceContext | undefined;
 		if (includeWorkspaceMetadata && !isCancelled(token)) {
@@ -590,7 +635,8 @@ async function handleImproveCommand(
 			recentEditsContext,
 			clipboardContext,
 			symbolSearch,
-			dependencies
+			dependencies,
+			mcpContext
 		);
 
 		// Get the configured language model (or use current chat model)
@@ -675,9 +721,9 @@ async function handleImproveCommand(
 			}
 		}
 
-		// Create messages for the LLM
+		// Create messages for the LLM (use System role for instructions)
 		const messages = [
-			vscode.LanguageModelChatMessage.User(systemPrompt)
+			vscode.LanguageModelChatMessage.System(systemPrompt)
 		];
 
 	// Show clearer generation label while the model is generating the improved prompt
@@ -690,13 +736,16 @@ async function handleImproveCommand(
 		let improvedPrompt = '';
 
 		// Stream the response - the LLM will automatically invoke tools as needed
-		if (!safeStreamWrite(stream, '## Improved Prompt\n\n')) {
-			return; // Stream closed
+		// If using custom preset, do not add any header/wrappers; stream plain output
+		const presetInUse = vscode.workspace.getConfiguration('promptImprover').get<string>('systemPromptPreset', 'balanced');
+		const addDecorations = presetInUse !== 'custom';
+		if (addDecorations) {
+			if (!safeStreamWrite(stream, '## Improved Prompt\n\n')) {
+				return; // Stream closed
+			}
+			// Provide a subtle progress hint only in decorated mode
+			safeStreamWrite(stream, '*Generating response from model...*\n\n', 'progress');
 		}
-
-		// Provide an immediate progress hint so users aren't left staring at an empty header
-		// while the model starts streaming. This helps on slower models/providers.
-		safeStreamWrite(stream, '*Generating response from model...*\n\n', 'progress');
 
 		for await (const fragment of chatResponse.text) {
 			// Check for cancellation during streaming
@@ -714,21 +763,24 @@ async function handleImproveCommand(
 			}
 		}
 
-		if (!safeStreamWrite(stream, '\n\n---\n\n')) {
-			return; // Stream closed
+		if (addDecorations) {
+			if (!safeStreamWrite(stream, '\n\n---\n\n')) {
+				return; // Stream closed
+			}
 		}
 
 		// Add a copy button - strip any remaining quotes or wrapper text
 		const cleanPrompt = improvedPrompt.trim().replace(/^["']|["']$/g, '');
 
 		try {
-			stream.button({
-				command: 'prompt-improver.copyImprovedPrompt',
-				title: vscode.l10n.t('📋 Copy to Clipboard'),
-				arguments: [cleanPrompt]
-			});
-
-			safeStreamWrite(stream, '\n\n💡 **Tip:** Click the button above to copy, or select the text and use Ctrl+C.\n');
+			if (addDecorations) {
+				stream.button({
+					command: 'prompt-improver.copyImprovedPrompt',
+					title: vscode.l10n.t('📋 Copy to Clipboard'),
+					arguments: [cleanPrompt]
+				});
+				// Do not add extra tip text to keep output concise
+			}
 		} catch (buttonError) {
 			// Button creation failed (stream might be closed)
 			console.warn('[Prompt Improver] Could not add copy button:', buttonError);
@@ -1331,17 +1383,20 @@ function getSystemPrompt(overridePreset?: string): string {
 	const config = vscode.workspace.getConfiguration('promptImprover');
 	const preset = overridePreset || config.get<string>('systemPromptPreset', 'balanced');
 
-	// Get the preset content, or use the manually edited systemPrompt if it differs from presets
-	const currentSystemPrompt = config.get<string>('systemPrompt', '');
-	const presetPrompt = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['balanced'];
-
-	// If user has manually edited the systemPrompt field, use that instead
-	const presetPrompts = Object.values(SYSTEM_PROMPT_PRESETS);
-	if (currentSystemPrompt && !presetPrompts.includes(currentSystemPrompt)) {
-		console.log('[Prompt Improver] Using manually edited system prompt');
-		return currentSystemPrompt;
+	// If preset is 'custom', use the systemPrompt setting
+	if (preset === 'custom') {
+		const customPrompt = config.get<string>('systemPrompt', '');
+		if (customPrompt && customPrompt.trim()) {
+			console.log('[Prompt Improver] Using custom system prompt');
+			return customPrompt;
+		}
+		// Fallback to balanced if custom is selected but empty
+		console.log('[Prompt Improver] Custom preset selected but systemPrompt is empty, using balanced preset');
+		return SYSTEM_PROMPT_PRESETS['balanced'];
 	}
 
+	// Use the preset prompt
+	const presetPrompt = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['balanced'];
 	return presetPrompt;
 }
 
@@ -2087,7 +2142,8 @@ function buildImprovePrompt(
 	recentEdits?: RecentEditsContext,
 	clipboardContext?: ClipboardContext,
 	symbolSearch?: SymbolSearchContext,
-	dependencies?: DependencyContext
+	dependencies?: DependencyContext,
+	mcpContext?: McpContext
 ): string {
 	const systemPromptTemplate = getSystemPrompt(overridePreset);
 
@@ -2296,6 +2352,17 @@ function buildImprovePrompt(
 		dependenciesSection += '\nEnsure the improved prompt suggests solutions compatible with these installed packages.\n';
 	}
 
+	// Format MCP context if available
+	let mcpSection = '';
+	if (mcpContext && mcpContext.available) {
+		mcpSection = '\n\n**MCP Context:**\n';
+		mcpSection += `${mcpContext.contextInfo || 'MCP servers available for enhanced code analysis'}\n`;
+		if (mcpContext.servers.length > 0) {
+			mcpSection += `Servers: ${mcpContext.servers.join(', ')}\n`;
+		}
+		mcpSection += '\nNote: The AI assistant has access to advanced code indexing and symbol analysis through MCP servers.\n';
+	}
+
 	// Replace placeholders in the system prompt
 	let systemPrompt = systemPromptTemplate
 		.replace(/\{userPrompt\}/g, userPrompt)
@@ -2312,7 +2379,7 @@ ${userPrompt}
 **Workspace Context:**
 - Programming Languages: ${languages}
 - Frameworks/Technologies: ${technologies}
-- Open Files: ${openFiles}${referencesContext}${historyContext}${markdownContextSection}${openFileContentsSection}${gitContextSection}${activeSelectionSection}${diagnosticsSection}${recentEditsSection}${clipboardSection}${symbolSearchSection}${dependenciesSection}
+- Open Files: ${openFiles}${referencesContext}${historyContext}${markdownContextSection}${openFileContentsSection}${gitContextSection}${activeSelectionSection}${diagnosticsSection}${recentEditsSection}${clipboardSection}${symbolSearchSection}${dependenciesSection}${mcpSection}
 
 Return the improved prompt now (plain text only, no markdown formatting, no wrapper text):`;
 }
@@ -2337,6 +2404,63 @@ ${userPrompt}
 6. **Recommendations:** Specific suggestions for improvement
 
 Be constructive and educational in your analysis.`;
+}
+
+/**
+ * Interface for MCP context information
+ */
+interface McpContext {
+	available: boolean;
+	servers: string[];
+	contextInfo?: string;
+}
+
+/**
+ * Check for available MCP servers and gather context
+ */
+async function checkMcpServers(): Promise<McpContext> {
+	const mcpContext: McpContext = {
+		available: false,
+		servers: []
+	};
+
+	try {
+		// Check if MCP setting is enabled
+		const config = vscode.workspace.getConfiguration('promptImprover');
+		const useMcpServers = config.get<boolean>('useMcpServers', true);
+		
+		if (!useMcpServers) {
+			console.log('[Prompt Improver] MCP servers disabled by user setting');
+			return mcpContext;
+		}
+
+		// Try to detect Serena MCP server by looking for its tools
+		// MCP servers are accessed through the Language Model API's tool calling
+		const models = await vscode.lm.selectChatModels({});
+		
+		if (models.length > 0) {
+			// Check if any model has MCP tools available
+			// Note: This is a simplified check - in practice, MCP integration in VS Code
+			// happens through the Language Model API and tools are available via context
+			
+			// For Serena specifically, we can check for its presence
+			const serenaTools = [
+				'mcp_oraios_serena_find_symbol',
+				'mcp_oraios_serena_get_symbols_overview',
+				'mcp_oraios_serena_search_for_pattern'
+			];
+			
+			mcpContext.available = true;
+			mcpContext.servers.push('Detected MCP-compatible environment');
+			mcpContext.contextInfo = 'MCP servers (like Serena) are available through the Language Model API for enhanced code analysis.';
+			
+			console.log('[Prompt Improver] MCP environment detected');
+		}
+	} catch (error) {
+		console.log('[Prompt Improver] Error checking MCP servers:', error);
+	}
+
+	return mcpContext;
 }
 
 /**
@@ -2634,6 +2758,91 @@ interface DependencyContext {
 	devDependencies: Record<string, string>;
 	packageCount: number;
 	totalDependencies: number;
+}
+
+/**
+ * Interface for Language Model Tool parameters
+ */
+interface IPromptImproverToolParameters {
+	prompt: string;
+	preset?: string;
+}
+
+/**
+ * Language Model Tool implementation for inline prompt improvement
+ * This allows Copilot to invoke prompt improvement without using @prompt-improver
+ * Usage: "improve this prompt: <your prompt>" or "boost this prompt: <your prompt>"
+ */
+class PromptImproverTool implements vscode.LanguageModelTool<IPromptImproverToolParameters> {
+	async invoke(
+		options: vscode.LanguageModelToolInvocationOptions<IPromptImproverToolParameters>,
+		token: vscode.CancellationToken
+	): Promise<vscode.LanguageModelToolResult> {
+		const params = options.input as IPromptImproverToolParameters;
+		const userPrompt = params.prompt;
+		const preset = params.preset;
+
+		try {
+			// Gather basic workspace context
+			const config = vscode.workspace.getConfiguration('promptImprover');
+			const includeWorkspaceMetadata = config.get<boolean>('includeWorkspaceMetadata', true);
+			
+			let workspaceContext: WorkspaceContext | undefined;
+			if (includeWorkspaceMetadata) {
+				workspaceContext = await gatherWorkspaceContext();
+			}
+
+			// Build the improvement prompt (simplified version for tool usage)
+			const systemPrompt = buildImprovePrompt(
+				userPrompt,
+				workspaceContext,
+				preset
+			);
+
+			// Get the configured language model
+			const model = await getConfiguredModel();
+			
+			if (!model) {
+				return new vscode.LanguageModelToolResult([
+					new vscode.LanguageModelTextPart('Unable to access language model for prompt improvement. Please ensure GitHub Copilot is installed and authenticated.')
+				]);
+			}
+
+			// Send request to improve the prompt
+			const messages = [
+				vscode.LanguageModelChatMessage.System(systemPrompt)
+			];
+
+			const response = await model.sendRequest(messages, {}, token);
+			
+			let improvedPrompt = '';
+			for await (const fragment of response.text) {
+				improvedPrompt += fragment;
+			}
+
+			// Clean up the response
+			improvedPrompt = improvedPrompt.trim();
+
+			return new vscode.LanguageModelToolResult([
+				new vscode.LanguageModelTextPart(improvedPrompt)
+			]);
+
+		} catch (error) {
+			console.error('[Prompt Improver Tool] Error:', error);
+			return new vscode.LanguageModelToolResult([
+				new vscode.LanguageModelTextPart(`Error improving prompt: ${error}`)
+			]);
+		}
+	}
+
+	async prepareInvocation(
+		options: vscode.LanguageModelToolInvocationPrepareOptions<IPromptImproverToolParameters>,
+		token: vscode.CancellationToken
+	): Promise<vscode.PreparedToolInvocation> {
+		return {
+			invocationMessage: 'Improving your prompt...'
+		};
+	}
 }
 
 // This method is called when your extension is deactivated

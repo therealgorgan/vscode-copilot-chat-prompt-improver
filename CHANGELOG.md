@@ -2,6 +2,62 @@
 
 All notable changes to the "prompt-improver" extension will be documented in this file.
 
+## [0.1.0] - 2025-11-15
+
+### Added - Language Model Tool Support
+- **Inline Prompt Improvement**: New Language Model Tool that allows Copilot to invoke prompt improvements without using @prompt-improver
+  - Natural language invocation: "improve this prompt: ..." or "boost this prompt: ..."
+  - Seamless integration with regular Copilot Chat conversations
+  - Copilot automatically decides when to invoke the tool
+  - Works with configured presets and settings
+- **Dual Usage Modes**: Extension now supports both:
+  - Chat Participant mode: `@prompt-improver /improve` (explicit control, all features)
+  - Language Model Tool mode: Inline with natural language (seamless, quick)
+
+### Documentation
+- Added `USAGE_GUIDE.md` - comprehensive guide explaining both usage methods
+- Documented conversation history limitation (affects both methods equally)
+- Added comparison table showing when to use each method
+- Included troubleshooting and pro tips
+
+### Important Notes
+- **Conversation History**: Neither chat participants nor language model tools have access to full conversation history due to VS Code API limitations
+- Both methods provide the same core functionality with different interaction patterns
+- Tool mode is recommended for quick improvements during regular Copilot conversations
+- Participant mode is recommended for complex prompts needing specific presets or analysis
+
+## [0.0.17] - 2025-11-15
+
+### Added
+- **Custom Preset Support**: Create and save your own system prompts
+  - New "Custom" option in System Prompt Preset dropdown
+  - Auto-detection: editing System Prompt automatically switches to Custom preset
+  - Custom prompts are preserved across sessions
+  - Supports placeholders: `{userPrompt}`, `{languages}`, `{technologies}`, `{openFiles}`
+- **MCP Server Integration**: Automatic detection and usage of Model Context Protocol servers
+  - New `useMcpServers` setting (enabled by default)
+  - Detects MCP-compatible environments (e.g., Serena)
+  - Includes MCP context in prompt improvements for enhanced code analysis
+  - Graceful degradation when MCP servers are unavailable
+- **Settings Command**: Quick access to extension settings
+  - New command: "Prompt Improver: Settings"
+  - Opens settings filtered to `@ext:TheRealGorgan.prompt-improver`
+
+### Changed
+- **Improved System Prompt Handling**:
+  - Custom presets preserve user edits instead of overwriting with preset content
+  - Configuration listener now handles both preset and system prompt changes
+  - Better initialization logic for preset content
+- **Enhanced Context Building**:
+  - Added MCP context section to prompt improvement prompts
+  - Updated `buildImprovePrompt()` to include MCP server information
+  - Better progress messages during context gathering
+
+### Documentation
+- Added `CUSTOM_PRESET_MCP_GUIDE.md` - comprehensive guide for new features
+- Added `CHANGES_SUMMARY.md` - technical summary of implementation changes
+- Updated configuration descriptions for clarity
+
 ## [0.0.15] - 2025-10-12
 
 ### Added

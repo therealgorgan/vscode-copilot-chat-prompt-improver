@@ -218,20 +218,12 @@ If command === 'improve':
   │ Suggestions:                    │
   │ • Analyze the improvements      │
   │ • Summarize conversation [NEW!] │
-  │ • Create handoff prompt         │
   └─────────────────────────────────┘
 
 If command === 'summary':
   ┌─────────────────────────────────┐
   │ Suggestions:                    │
   │ • Improve a prompt [NEW!]       │
-  │ • Create handoff prompt [NEW!]  │
-  └─────────────────────────────────┘
-
-If command === 'handoff':
-  ┌─────────────────────────────────┐
-  │ Suggestions:                    │
-  │ • Improve handoff prompt        │
   └─────────────────────────────────┘
 ```
 

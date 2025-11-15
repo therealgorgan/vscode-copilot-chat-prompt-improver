@@ -33,7 +33,6 @@
 - ✅ `/improve-detailed` - Use detailed preset
 - ✅ `/analyze` - Analyze prompt effectiveness
 - ✅ `/summary` - Summarize conversation history
-- ✅ `/handoff` or `/new-chat` - Create context-preserving prompt
 
 ### Context Gathering
 - ✅ Workspace metadata (languages, technologies, open files)
@@ -78,9 +77,8 @@
 - ✅ Version badge updated to 0.0.8
 
 ### Follow-up Suggestions
-- ✅ After `/improve`: "Analyze", "Summarize conversation", "Create handoff"
-- ✅ After `/summary`: "Improve a prompt", "Create handoff"
-- ✅ After `/handoff`: "Improve handoff prompt"
+- ✅ After `/improve`: "Analyze", "Summarize conversation"
+- ✅ After `/summary`: "Improve a prompt"
 
 ---
 
@@ -110,7 +108,6 @@
 - ✅ `handleImproveCommand()` - Main improve logic
 - ✅ `handleAnalyzeCommand()` - Prompt analysis
 - ✅ `handleSummaryCommand()` - Conversation summary
-- ✅ `handleHandoffCommand()` - Agent handoff
 - ✅ All handlers pass `request.model` to `getConfiguredModel()`
 - ✅ All handlers check cancellation tokens
 - ✅ All handlers use `safeStreamWrite()`

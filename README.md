@@ -17,7 +17,6 @@ A VS Code extension that analyzes and improves your GitHub Copilot Chat prompts 
 | 🎯 **Three Presets** | Concise, Balanced, or Detailed improvement styles |
 | 🔍 **Rich Context** | Workspace metadata, Git status, open files, conversation history |
 | 📊 **Prompt Analysis** | Understand what makes prompts effective |
-| 🔄 **Agent Handoff** | Seamlessly transition to new chats without losing context |
 | 📋 **One-Click Copy** | Copy improved prompts instantly |
 | 🛡️ **Robust Error Handling** | Graceful degradation and user-friendly error messages |
 | ⚙️ **Granular Control** | Enable/disable specific context types |
@@ -59,11 +58,6 @@ Search for "Prompt Improver" in VS Code Extensions.
 **Analyze a prompt:**
 ```
 @prompt-improver /analyze create a REST API with authentication
-```
-
-**Create a handoff prompt:**
-```
-@prompt-improver /handoff
 ```
 
 ---
@@ -162,31 +156,6 @@ Analyzes your conversation history to provide a clear, actionable summary of wha
 When you use `/improve` with "Include Conversation History" enabled, the improved prompt automatically includes a summary of what you've been working on. This ensures the improved prompt is contextually aware of your recent progress.
 
 ---
-
-### `/handoff` or `/new-chat` - Create Agent Handoff Prompt
-
-Creates a context-preserving prompt for starting a new chat session.
-
-**Usage:**
-```
-@prompt-improver /handoff
-@prompt-improver /new-chat
-@prompt-improver /handoff Focus on the authentication implementation
-```
-
-**What it includes:**
-- 📜 Conversation history (last 10 exchanges)
-- 💻 Workspace context (languages, technologies, open files)
-- 🔀 Git context (branch, status, commits, staged changes)
-- 🎯 Current state and next steps
-- 📝 Technical decisions and requirements
-
-**Perfect for:**
-- Long conversations that need to be split
-- Handing off work to a fresh agent
-- Starting a new chat without losing context
-- Avoiding token limits in long sessions
-
 ---
 
 ## 💡 Examples

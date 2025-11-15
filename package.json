@@ -2,7 +2,7 @@
   "name": "prompt-improver",
   "displayName": "Prompt Improver",
   "description": "Improve your Copilot Chat prompts using AI and workspace context",
-  "version": "0.0.16",
+  "version": "0.1.0",
   "publisher": "TheRealGorgan",
   "author": {
     "name": "The Real Gorgan",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/TheRealGorgan/vscode-chat-improve-prompt"
+    "url": "https://github.com/therealgorgan/vscode-copilot-chat-prompt-improver"
   },
   "icon": "icon.png",
   "license": "MIT",
@@ -38,6 +38,41 @@
         "title": "List Available Copilot Models",
         "category": "Prompt Improver",
         "icon": "$(list-unordered)"
+      },
+      {
+        "command": "prompt-improver.openSettings",
+        "title": "Settings",
+        "category": "Prompt Improver",
+        "icon": "$(settings-gear)"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "prompt_improver",
+        "displayName": "Prompt Improver",
+        "modelDescription": "Analyzes and improves prompts by adding context, specificity, and best practices. Use when the user asks to 'improve', 'enhance', or 'boost' a prompt.",
+        "icon": "$(sparkle)",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "description": "The prompt text to improve"
+            },
+            "preset": {
+              "type": "string",
+              "description": "Optional preset style: 'concise', 'balanced', or 'detailed'",
+              "enum": [
+                "concise",
+                "balanced",
+                "detailed"
+              ]
+            }
+          },
+          "required": [
+            "prompt"
+          ]
+        }
       }
     ],
     "chatParticipants": [
@@ -92,16 +127,23 @@
           "enum": [
             "concise",
             "balanced",
-            "detailed"
+            "detailed",
+            "custom"
           ],
-          "markdownDescription": "Choose the improvement style. **All presets receive the same rich context** (workspace, Git, conversation, files) - they differ in how much detail they add:\n\n- **Concise**: Minimal elaboration, focused improvements (fastest)\n- **Balanced**: Good detail without over-engineering (recommended)\n- **Detailed**: Comprehensive, production-ready specifications (most thorough)\n\n**Note:** Context inclusion is controlled by the settings below, not by the preset.",
+          "enumDescriptions": [
+            "Minimal elaboration, focused improvements (fastest)",
+            "Good detail without over-engineering (recommended)",
+            "Comprehensive, production-ready specifications (most thorough)",
+            "Use your own custom system prompt"
+          ],
+          "markdownDescription": "Choose the improvement style. **All presets receive the same rich context** (workspace, Git, conversation, files) - they differ in how much detail they add:\n\n- **Concise**: Minimal elaboration, focused improvements (fastest)\n- **Balanced**: Good detail without over-engineering (recommended)\n- **Detailed**: Comprehensive, production-ready specifications (most thorough)\n- **Custom**: Use your own custom system prompt (edit below)\n\n**Note:** Context inclusion is controlled by the settings below, not by the preset.",
           "order": 0
         },
         "promptImprover.systemPrompt": {
           "type": "string",
           "default": "",
           "editPresentation": "multilineText",
-          "markdownDescription": "**View/Edit System Prompt** - Shows the current preset content. You can edit this directly to create a custom prompt.\n\n**Editing this field:** Your changes will be preserved and used instead of the preset.\n\n**Available placeholders:** `{userPrompt}`, `{languages}`, `{technologies}`, `{openFiles}`",
+          "markdownDescription": "**Custom System Prompt** - Only used when 'Custom' preset is selected above.\n\n**Available placeholders:** `{userPrompt}`, `{languages}`, `{technologies}`, `{openFiles}`\n\n**Tip:** Start by selecting a preset above, then switch to 'Custom' to edit it.",
           "order": 1
         },
         "promptImprover.modelFamily": {
@@ -188,12 +230,18 @@
           "default": true,
           "markdownDescription": "**Filter Workspace Tools** - Limits workspace tool access to only file/directory operations (removes grep/semantic search).\n\n**Why:** Faster responses, lower cost while maintaining code access. **When to enable:** Always, unless you need deep search. **Impact:** Reduces tool overhead significantly.",
           "order": 15
+        },
+        "promptImprover.useMcpServers": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "**Use MCP Servers** - Automatically detect and use available Model Context Protocol (MCP) servers for enhanced code analysis and context.\n\n**Why:** MCP servers like Serena provide advanced code indexing and symbol analysis. **When to disable:** If you don't have MCP servers configured or want to reduce API overhead. **Impact:** Provides deep codebase understanding when available.",
+          "order": 16
         }
       }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
+    "vscode:prepublish": "node esbuild.js --production",
     "compile": "npm run check-types && npm run lint && node esbuild.js",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
