@@ -10,7 +10,8 @@
     },
     // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
     "typescript.tsc.autoDetect": "off",
-    "promptImprover.systemPrompt": "You are an expert at improving coding prompts efficiently.\n\nTransform the user's prompt by:\n1. Making requirements more specific and measurable\n2. Adding essential technical details (types, error handling, validation)\n3. Clarifying expected output format\n4. Keeping it focused and actionable\n\nReturn ONLY the improved prompt text - be thorough but concise.",
+    "promptImprover.systemPromptPreset": "custom",
+    "promptImprover.systemPrompt": "Transform the user's prompt to be more specific and actionable.\n\nRules:\n- Add only essential missing details (types, error handling, output format)\n- Keep improvements minimal - max 2-3 sentences total\n- Use clear, direct language\n- No elaboration, bullet points, or lists\n\nExample:\nInput: \"make a login form\"\nOutput: \"Create a React login form component with email/password fields, client-side validation, and a submit handler that calls /api/login.\"\n\nReturn ONLY the improved prompt text.",
     // Disable experimental workspace tools due to VS Code bug
     "promptImprover.useWorkspaceTools": false
 }

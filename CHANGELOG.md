@@ -2,6 +2,16 @@
 
 All notable changes to the "prompt-improver" extension will be documented in this file.
 
+## [0.1.1] - 2025-11-15
+
+### Fixed
+- **Scope-aware preset updates**: Changes to `systemPrompt` and `systemPromptPreset` now update the paired setting in the same scope where the change occurred (Global, Workspace, or Workspace Folder). Prevents confusion where edits in a workspace or folder scope would flip settings only at the user (global) scope.
+- **Reentrancy guard**: Avoids reacting to programmatic config writes, preventing loops and noisy UI.
+- **Initialization snapshot**: Captures an initial configuration snapshot so the very first change has correct scope detection.
+
+### Build
+- Rebuilt production bundle and repackaged VSIX.
+
 ## [0.1.0] - 2025-11-15
 
 ### Added - Language Model Tool Support

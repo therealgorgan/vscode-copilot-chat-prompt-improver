@@ -13,6 +13,9 @@ const PARTICIPANT_ID = 'prompt-improver.prompt-improver';
 // Track recent file edits for context
 let recentEdits: Array<{ file: string; timestamp: number }> = [];
 
+// Storage key for saved custom prompt
+const CUSTOM_PROMPT_STORAGE_KEY = 'promptImprover.savedCustomPrompt';
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -37,14 +40,39 @@ export function activate(context: vscode.ExtensionContext) {
 		if (e.affectsConfiguration('promptImprover.systemPromptPreset')) {
 			const config = vscode.workspace.getConfiguration('promptImprover');
 			const preset = config.get<string>('systemPromptPreset', 'balanced');
+			const currentSystemPrompt = config.get<string>('systemPrompt', '');
 			
-			// If preset is not 'custom', update systemPrompt to show preset content
+			// If preset is not 'custom', save current prompt if it's custom, then show preset content
 			if (preset !== 'custom') {
+				// Save the current custom prompt before switching away
+				const presetPrompts = Object.values(SYSTEM_PROMPT_PRESETS);
+				if (currentSystemPrompt && !presetPrompts.includes(currentSystemPrompt)) {
+					context.globalState.update(CUSTOM_PROMPT_STORAGE_KEY, currentSystemPrompt);
+					console.log(`[Prompt Improver] Saved custom prompt to storage`);
+				}
+				
 				const presetContent = SYSTEM_PROMPT_PRESETS[preset] || SYSTEM_PROMPT_PRESETS['balanced'];
 				// Update the systemPrompt field to show the current preset content
 				config.update('systemPrompt', presetContent, vscode.ConfigurationTarget.Global);
 				console.log(`[Prompt Improver] Preset changed to: ${preset}`);
 			} else {
+				// Switching to custom - restore saved custom prompt ONLY if current is a preset AND no workspace override
+				const savedCustomPrompt = context.globalState.get<string>(CUSTOM_PROMPT_STORAGE_KEY);
+				const presetPrompts = Object.values(SYSTEM_PROMPT_PRESETS);
+				
+				// Check if there's a workspace/folder override
+				const systemPromptInspect = config.inspect<string>('systemPrompt');
+				const hasWorkspaceOverride = systemPromptInspect?.workspaceValue !== undefined || 
+				                             systemPromptInspect?.workspaceFolderValue !== undefined;
+				
+				if (savedCustomPrompt && 
+				    currentSystemPrompt !== savedCustomPrompt && 
+				    presetPrompts.includes(currentSystemPrompt) &&
+				    !hasWorkspaceOverride) {
+					// Only restore if current prompt is a preset and no workspace setting
+					config.update('systemPrompt', savedCustomPrompt, vscode.ConfigurationTarget.Global);
+					console.log(`[Prompt Improver] Restored saved custom prompt`);
+				}
 				console.log(`[Prompt Improver] Custom preset selected - using user-defined systemPrompt`);
 			}
 		}
@@ -721,9 +749,9 @@ async function handleImproveCommand(
 			}
 		}
 
-		// Create messages for the LLM (use System role for instructions)
+		// Create messages for the LLM
 		const messages = [
-			vscode.LanguageModelChatMessage.System(systemPrompt)
+			vscode.LanguageModelChatMessage.User(systemPrompt)
 		];
 
 	// Show clearer generation label while the model is generating the improved prompt
@@ -2145,9 +2173,19 @@ function buildImprovePrompt(
 	dependencies?: DependencyContext,
 	mcpContext?: McpContext
 ): string {
+	const config = vscode.workspace.getConfiguration('promptImprover');
+	const preset = overridePreset || config.get<string>('systemPromptPreset', 'balanced');
 	const systemPromptTemplate = getSystemPrompt(overridePreset);
 
-	// Build context strings
+	// For custom preset, use a simplified prompt format with just the custom prompt + user prompt
+	if (preset === 'custom') {
+		return `${systemPromptTemplate}
+
+User's prompt to improve:
+${userPrompt}`;
+	}
+
+	// Build context strings for preset prompts
 	const languages = workspaceContext?.languages.join(', ') || 'Unknown';
 	const technologies = workspaceContext?.technologies.join(', ') || 'Unknown';
 	const openFiles = workspaceContext?.openFiles.length ? workspaceContext.openFiles.join(', ') : 'None';
@@ -2803,17 +2841,15 @@ class PromptImproverTool implements vscode.LanguageModelTool<IPromptImproverTool
 			const model = await getConfiguredModel();
 			
 			if (!model) {
-				return new vscode.LanguageModelToolResult([
-					new vscode.LanguageModelTextPart('Unable to access language model for prompt improvement. Please ensure GitHub Copilot is installed and authenticated.')
-				]);
-			}
+			return new vscode.LanguageModelToolResult([
+				new vscode.LanguageModelTextPart('Unable to access language model for prompt improvement. Please ensure GitHub Copilot is installed and authenticated.')
+			]);
+		}
 
-			// Send request to improve the prompt
-			const messages = [
-				vscode.LanguageModelChatMessage.System(systemPrompt)
-			];
-
-			const response = await model.sendRequest(messages, {}, token);
+		// Send request to improve the prompt
+		const messages = [
+			vscode.LanguageModelChatMessage.User(systemPrompt)
+		];			const response = await model.sendRequest(messages, {}, token);
 			
 			let improvedPrompt = '';
 			for await (const fragment of response.text) {
